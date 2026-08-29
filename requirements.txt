@@ -1,5 +1,6 @@
 aiogram==3.14.0
 SQLAlchemy==2.0.35
+greenlet==3.1.1
 aiosqlite==0.20.0
 asyncpg==0.30.0
 httpx==0.27.2
@@ -9,6 +10,12 @@ jinja2==3.1.4
 python-multipart==0.0.9
 itsdangerous==2.2.0
 pydantic-settings==2.5.2
+
+# greenlet — SQLAlchemy async вообще не может работать без него (любой драйвер,
+# и SQLite, и Postgres). У тебя локально на Windows он, похоже, уже был установлен
+# как побочный эффект от чего-то другого в venv, поэтому не бросалось в глаза,
+# что он не прописан явно — а на чистой сборке Railway этого запасного
+# экземпляра не было, отсюда и ValueError "greenlet library is required".
 
 # asyncpg — драйвер Postgres для async SQLAlchemy. На Windows более старым версиям
 # (включая 0.29.0) требовался установленный компилятор (Microsoft C++ Build Tools),

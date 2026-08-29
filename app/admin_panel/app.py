@@ -15,7 +15,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from sqlalchemy import select
 
 from app.config import settings
-from app.database.db import get_session
+from app.database.db import get_session, init_db
 from app.database.models import Category, Order, OrderStatus, Package, Product, User
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
@@ -24,6 +24,15 @@ from app.webapp.payments import _fulfill_order
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="eSIM Store — Админка")
+
+
+@app.on_event("startup")
+async def on_startup():
+    # Та же логика, что и в app/webapp/app.py — таблицы должны быть готовы
+    # независимо от того, какой из трёх сервисов Railway стартовал первым.
+    await init_db()
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.ADMIN_PANEL_SECRET_KEY,

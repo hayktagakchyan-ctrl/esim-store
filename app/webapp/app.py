@@ -18,7 +18,7 @@ from sqlalchemy import select
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
-from app.database.db import get_session
+from app.database.db import get_session, init_db
 
 logging.basicConfig(level=logging.INFO)
 from app.database.models import Package, User, Order, OrderStatus
@@ -28,6 +28,17 @@ from app.webapp import webhooks, payments, products, conversations, admin_chat, 
 BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="eSIM Store — Mini App API")
+
+
+@app.on_event("startup")
+async def on_startup():
+    # На случай, если этот процесс запустится раньше ботов (обычная ситуация в
+    # деплое с несколькими сервисами — порядок старта не гарантирован) — таблицы
+    # должны быть готовы независимо от того, кто стартовал первым. create_all
+    # безопасно вызывать много раз: существующие таблицы не трогает.
+    await init_db()
+
+
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.SHOP_SESSION_SECRET_KEY,

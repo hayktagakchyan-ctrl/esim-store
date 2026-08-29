@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}#{{ order.id }} — {{ t("brand") }}{% endblock %}
+{% block head %}
+{% if still_waiting %}<meta http-equiv="refresh" content="5">{% endif %}
+{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">№{{ order.id }}</h2>
+    <div style="text-align:center;">
+      <div class="status-badge">{{ t(status_key) }}</div>
+    </div>
+
+    <div class="card">
+      <div>{{ order.package.country_name }} — {{ order.package.title }}</div>
+      <div class="hint">{{ order.price_charged }} {{ order.currency }}</div>
+    </div>
+
+    {% if order.qr_code_data %}
+    <div style="text-align:center;">
+      <img class="qr-image" src="{{ order.qr_code_data }}" alt="QR">
+    </div>
+    {% endif %}
+
+    {% if order.activation_instructions %}
+    <p class="hint">{{ t("activation_code_label") }}</p>
+    <p class="mono">{{ order.activation_instructions }}</p>
+    {% endif %}
+
+    {% if order.iccid %}
+    <p class="hint">ICCID: <span class="mono">{{ order.iccid }}</span></p>
+    {% endif %}
+
+    {% if still_waiting %}
+    <p class="hint" style="text-align:center;">…</p>
+    {% endif %}
+
+    <p class="hint" style="margin-top:20px;">{{ t("checkout_hint") }}</p>
+  </div>
+</section>
+{% endblock %}

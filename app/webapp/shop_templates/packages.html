@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ country_name }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <p><a href="/shop/catalog" class="hint">{{ t("back_to_countries") }}</a></p>
+    <h2 class="section-title">{{ country_name }}</h2>
+    {% for p in packages %}
+    <a class="row" href="/shop/checkout/{{ p.id }}">
+      <span class="name">{{ p.title }}</span>
+      <span class="meta">{{ p.sell_price }} {{ p.currency }} ›</span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

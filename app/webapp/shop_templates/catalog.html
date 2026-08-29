@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ t("catalog_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("catalog_title") }}</h2>
+    {% for c in countries %}
+    <a class="row" href="/shop/country/{{ c.code }}">
+      <span class="name">{{ c.name }}</span>
+      <span class="meta">{{ c.code }} ›</span>
+    </a>
+    {% else %}
+    <p class="hint" style="text-align:center;">—</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

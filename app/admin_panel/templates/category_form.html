@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}{{ "Редактировать категорию" if category else "Новая категория" }} — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories" class="active">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/categories" class="status-label">← Все категории</a></p>
+  <h2>{{ "Редактировать категорию" if category else "Новая категория" }}</h2>
+
+  <div class="card">
+    <form method="post" action="{{ '/categories/' ~ category.id ~ '/edit' if category else '/categories/new' }}">
+      <div class="field-row">
+        <div class="field" style="max-width:100px;">
+          <div class="label">Иконка (эмодзи)</div>
+          <input type="text" name="icon" value="{{ category.icon if category else '🛍' }}" maxlength="8">
+        </div>
+        <div class="field">
+          <div class="label">Slug (латиницей, без пробелов — напр. "car-rental")</div>
+          <input type="text" name="slug" value="{{ category.slug if category else '' }}" required>
+        </div>
+        <div class="field" style="max-width:120px;">
+          <div class="label">Порядок</div>
+          <input type="text" name="sort_order" value="{{ category.sort_order if category else 0 }}">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Название — русский</div>
+        <input type="text" name="title_ru" value="{{ category.title_ru if category else '' }}" required>
+      </div>
+      <div class="field">
+        <div class="label">Название — հայերեն</div>
+        <input type="text" name="title_hy" value="{{ category.title_hy if category else '' }}" required>
+      </div>
+      <div class="field">
+        <div class="label">Название — English</div>
+        <input type="text" name="title_en" value="{{ category.title_en if category else '' }}" required>
+      </div>
+
+      <div class="field">
+        <div class="label">Подзаголовок — русский (необязательно, короткая строка под названием)</div>
+        <input type="text" name="subtitle_ru" value="{{ category.subtitle_ru if category and category.subtitle_ru else '' }}">
+      </div>
+      <div class="field">
+        <div class="label">Подзаголовок — հայերեն (необязательно)</div>
+        <input type="text" name="subtitle_hy" value="{{ category.subtitle_hy if category and category.subtitle_hy else '' }}">
+      </div>
+      <div class="field">
+        <div class="label">Подзаголовок — English (необязательно)</div>
+        <input type="text" name="subtitle_en" value="{{ category.subtitle_en if category and category.subtitle_en else '' }}">
+      </div>
+
+      <div class="checkbox-field">
+        <input type="checkbox" name="is_active" id="is_active" {{ "checked" if not category or category.is_active else "" }}>
+        <label for="is_active">Показывать в Mini App клиентам</label>
+      </div>
+
+      <button class="btn" type="submit">{{ "Сохранить" if category else "Добавить" }}</button>
+    </form>
+  </div>
+
+  {% if category %}
+  <div class="card">
+    <form method="post" action="/categories/{{ category.id }}/delete" onsubmit="return confirm('Удалить категорию? Это возможно только если в ней нет товаров.');">
+      <button class="btn danger" type="submit">Удалить категорию</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

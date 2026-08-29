@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Товары — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products" class="active">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Товары по категориям</h2>
+  <p class="status-label" style="margin-bottom:16px;">
+    Это не eSIM — тут ручные товары. Клиент выбирает один в Mini App, и вместо
+    оплаты сразу открывается чат с тобой — цену и детали обсуждаете там же.
+    Сами категории (лаунж, туры, что угодно ещё) добавляются на странице «Категории».
+  </p>
+
+  <div class="filters">
+    <a href="/products" class="{{ 'active' if not current_category_id else '' }}">Все</a>
+    {% for c in categories %}
+      <a href="/products?category_id={{ c.id }}" class="{{ 'active' if current_category_id == c.id else '' }}">
+        {{ c.icon }} {{ c.title_ru }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <p><a class="btn" href="/products/new">+ Добавить товар</a></p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Категория</th>
+        <th>Название (RU)</th>
+        <th>Цена</th>
+        <th>Активен</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for product in products %}
+      <tr onclick="location.href='/products/{{ product.id }}/edit'">
+        <td>{{ product.category.icon }} {{ product.category.title_ru }}</td>
+        <td>{{ product.title_ru }}</td>
+        <td>{{ (product.price ~ " " ~ product.currency) if product.price is not none else "по запросу" }}</td>
+        <td>{{ "Да" if product.is_active else "Нет" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="status-label">Товаров пока нет — сначала добавь категорию, потом товар.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

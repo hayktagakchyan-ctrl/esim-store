@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}{{ category_title }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <p><a href="/shop/services" class="hint">{{ t("back_to_countries") }}</a></p>
+    <h2 class="section-title">{{ category_title }}</h2>
+
+    {% for p in products %}
+    <div class="card">
+      <div style="font-weight:600;">{{ p.title }}</div>
+      {% if p.description %}<div class="hint" style="margin-top:4px;">{{ p.description }}</div>{% endif %}
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
+        <span>{% if p.price is not none %}<strong>{{ p.price }} {{ p.currency }}</strong>{% endif %}</span>
+        <form method="post" action="/shop/chat/start" style="margin:0;">
+          <input type="hidden" name="category_id" value="{{ category_id }}">
+          <input type="hidden" name="product_id" value="{{ p.id }}">
+          <button class="btn" type="submit" style="padding:10px 20px; font-size:14px;">{{ t("product_ask_button") }}</button>
+        </form>
+      </div>
+    </div>
+    {% else %}
+    <p class="hint" style="text-align:center;">{{ t("services_empty") }}</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

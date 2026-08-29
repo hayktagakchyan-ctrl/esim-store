@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ t("checkout_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <p><a href="/shop/country/{{ package.country_code }}" class="hint">{{ t("back_to_plans") }}</a></p>
+    <h2 class="section-title">{{ t("checkout_title") }}</h2>
+
+    <div class="card">
+      <div style="display:flex; justify-content:space-between;">
+        <span>{{ package.country_name }} — {{ package.title }}</span>
+        <strong>{{ package.sell_price }} {{ package.currency }}</strong>
+      </div>
+    </div>
+
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    <p class="hint" style="margin-bottom:16px;">{{ t("logged_in_as") }} <strong>{{ account.email }}</strong></p>
+
+    <form method="post" action="/shop/checkout/{{ package.id }}">
+      <button class="btn block" type="submit" name="method" value="idram">{{ t("checkout_pay_idram") }}</button>
+      {% if oxapay_enabled %}
+      <button class="btn secondary block" type="submit" name="method" value="oxapay" style="margin-top:10px;">{{ t("checkout_pay_oxapay") }}</button>
+      {% endif %}
+      {% if test_payment_enabled %}
+      <button class="btn block" type="submit" name="method" value="test" style="margin-top:10px; background:none; border:2px dashed var(--text-tertiary); color:var(--text-secondary); box-shadow:none;">🧪 Тестовая оплата</button>
+      {% endif %}
+    </form>
+
+    <p class="hint" style="margin-top:20px;">{{ t("checkout_hint") }}</p>
+  </div>
+</section>
+{% endblock %}

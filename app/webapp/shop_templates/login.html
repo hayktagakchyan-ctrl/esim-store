@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}{{ t("login_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("login_title") }}</h2>
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+    {% if unverified_email %}
+    <form method="post" action="/shop/resend-verification" style="margin-bottom:16px;">
+      <input type="hidden" name="email" value="{{ unverified_email }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn secondary block" type="submit">{{ t("resend_verification") }}</button>
+    </form>
+    {% endif %}
+    <form method="post" action="/shop/login">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="field">
+        <label for="email">{{ t("email_label") }}</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+      <div class="field">
+        <label for="password">{{ t("password_label") }}</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+      <button class="btn block" type="submit">{{ t("login_submit") }}</button>
+    </form>
+    <p class="divider"><a href="/shop/forgot-password">{{ t("forgot_password_link") }}</a></p>
+    <p class="divider">{{ t("no_account_yet") }} <a href="/shop/register?next={{ next }}">{{ t("register_title") }}</a></p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ "Редактировать пакет" if package else "Новый пакет" }} — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages" class="active">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/packages" class="status-label">← Все пакеты</a></p>
+  <h2>{{ "Редактировать пакет" if package else "Новый пакет" }}</h2>
+
+  <div class="card">
+    <form method="post" action="{{ '/packages/' ~ package.id ~ '/edit' if package else '/packages/new' }}">
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Код страны (ISO, напр. AM)</div>
+          <input type="text" name="country_code" value="{{ package.country_code if package else '' }}" required>
+        </div>
+        <div class="field">
+          <div class="label">Название страны</div>
+          <input type="text" name="country_name" value="{{ package.country_name if package else '' }}" required>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Название пакета (то, что видит клиент)</div>
+        <input type="text" name="title" value="{{ package.title if package else '' }}" placeholder="5 ГБ / 30 дней" required>
+      </div>
+
+      <div class="field">
+        <div class="label">Код пакета esimaccess (packageCode / slug)</div>
+        <input type="text" name="esimaccess_package_code" value="{{ package.esimaccess_package_code if package else '' }}" required>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Объём, МБ</div>
+          <input type="text" name="data_amount_mb" value="{{ package.data_amount_mb if package else '' }}" required>
+        </div>
+        <div class="field">
+          <div class="label">Срок действия, дней</div>
+          <input type="text" name="validity_days" value="{{ package.validity_days if package else '' }}" required>
+        </div>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Закупочная цена (у esimaccess)</div>
+          <input type="text" name="cost_price" value="{{ package.cost_price if package else '' }}" required>
+        </div>
+        <div class="field">
+          <div class="label">Цена клиенту</div>
+          <input type="text" name="sell_price" value="{{ package.sell_price if package else '' }}" required>
+        </div>
+        <div class="field">
+          <div class="label">Валюта</div>
+          <input type="text" name="currency" value="{{ package.currency if package else 'USD' }}" required>
+        </div>
+      </div>
+
+      <div class="checkbox-field">
+        <input type="checkbox" name="is_active" id="is_active" {{ "checked" if not package or package.is_active else "" }}>
+        <label for="is_active">Показывать в каталоге клиентам</label>
+      </div>
+
+      <button class="btn" type="submit">{{ "Сохранить" if package else "Добавить" }}</button>
+    </form>
+  </div>
+
+  {% if package %}
+  <div class="card">
+    <form method="post" action="/packages/{{ package.id }}/delete" onsubmit="return confirm('Удалить пакет из каталога?');">
+      <button class="btn danger" type="submit">Удалить пакет</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

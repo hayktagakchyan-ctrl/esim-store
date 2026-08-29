@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Категории — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories" class="active">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Категории</h2>
+  <p class="status-label" style="margin-bottom:16px;">
+    Это карточки, которые клиент видит на главном экране Mini App (кроме eSIM —
+    она всегда первая и отдельно от этого списка). Добавь сколько угодно новых —
+    например, «Аренда авто» или «Страховка» — и товары к ним на странице «Товары».
+  </p>
+
+  {% if request.query_params.get('error') == 'has_products' %}
+  <p style="color: var(--accent-red); margin-bottom:16px;">
+    Нельзя удалить категорию, пока в ней есть товары — сначала удали или перенеси их.
+  </p>
+  {% elif request.query_params.get('error') == 'need_category_first' %}
+  <p style="color: var(--accent-red); margin-bottom:16px;">
+    Сначала добавь хотя бы одну категорию — товару нужно к чему-то относиться.
+  </p>
+  {% endif %}
+
+  <p><a class="btn" href="/categories/new">+ Добавить категорию</a></p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Иконка</th>
+        <th>Название (RU)</th>
+        <th>Порядок</th>
+        <th>Активна</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for category in categories %}
+      <tr onclick="location.href='/categories/{{ category.id }}/edit'">
+        <td style="font-size:20px;">{{ category.icon }}</td>
+        <td>{{ category.title_ru }}</td>
+        <td>{{ category.sort_order }}</td>
+        <td>{{ "Да" if category.is_active else "Нет" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="4" class="status-label">Категорий пока нет — добавь первую.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

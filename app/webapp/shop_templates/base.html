@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="color-scheme" content="light dark">
+  <title>{% block title %}{{ t("brand") }}{% endblock %}</title>
+  <link rel="stylesheet" href="/shop-static/style.css?v=4">
+  <script src="/shop-static/theme.js"></script>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="navbar-wrap">
+    <nav class="navbar">
+      <a class="logo" href="/shop/">📶 {{ t("brand") }}</a>
+      <div class="nav-links">
+        <a href="/shop/catalog">{{ t("nav_catalog") }}</a>
+        <a href="/shop/services">{{ t("nav_services") }}</a>
+        {% if account %}
+          <a href="/shop/account/orders">{{ t("nav_my_orders") }}</a>
+          <a href="/shop/account/chats">{{ t("nav_my_chats") }}</a>
+          <a href="/shop/logout">{{ t("nav_logout") }}</a>
+        {% else %}
+          <a href="/shop/login">{{ t("nav_login") }}</a>
+          <a class="cta" href="/shop/register">{{ t("nav_register") }}</a>
+        {% endif %}
+        <div class="lang-switch">
+          <a href="/shop/set-lang/ru?next={{ request.url.path }}" class="{{ 'active' if lang == 'ru' else '' }}">RU</a>
+          <a href="/shop/set-lang/hy?next={{ request.url.path }}" class="{{ 'active' if lang == 'hy' else '' }}">ՀՀ</a>
+          <a href="/shop/set-lang/en?next={{ request.url.path }}" class="{{ 'active' if lang == 'en' else '' }}">EN</a>
+        </div>
+        <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Тема оформления">
+          <span class="knob"></span>
+        </button>
+      </div>
+    </nav>
+  </div>
+
+  {% block body %}{% endblock %}
+
+  <div class="footer">
+    <div class="container">
+      {{ t("footer_bot_teaser") }}
+      <div style="margin-top:10px;">
+        <a href="/shop/privacy">{{ t("footer_privacy_link") }}</a>
+        &nbsp;·&nbsp;
+        <a href="/shop/terms">{{ t("footer_terms_link") }}</a>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Чаты — eSIM Store</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <link rel="stylesheet" href="/support-chat/style.css?v=2">
+</head>
+<body>
+  <div id="app">
+    <header class="topbar">
+      <button id="back-btn" class="icon-btn" hidden aria-label="Назад">←</button>
+      <h1 id="header-title">Чаты с клиентами</h1>
+    </header>
+
+    <main id="screen-list" class="screen">
+      <div id="conversation-list" class="list"></div>
+    </main>
+
+    <main id="screen-thread" class="screen" hidden>
+      <div id="message-list" class="messages"></div>
+      <div class="composer">
+        <button id="chat-attach-btn" class="attach-btn" type="button" aria-label="Attach">📎</button>
+        <input id="chat-file-input" type="file" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt" hidden>
+        <input id="message-input" type="text" placeholder="Ответить клиенту…">
+        <button id="send-btn" class="send-btn">➤</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="/support-chat/app.js"></script>
+</body>
+</html>

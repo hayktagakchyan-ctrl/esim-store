@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{{ t("verify_email_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("verify_email_title") }}</h2>
+
+    {% if success %}
+      <p class="hint" style="text-align:center;">{{ t("verify_email_success") }}</p>
+      <p style="text-align:center; margin-top:16px;"><a class="btn" href="/shop/">{{ t("hero_cta") }}</a></p>
+    {% elif expired %}
+      <p class="error" style="text-align:center;">{{ t("verify_email_expired") }}</p>
+      <form method="post" action="/shop/resend-verification" style="margin-top:16px;">
+        <input type="hidden" name="email" value="{{ email }}">
+        <input type="hidden" name="next" value="/shop/">
+        <button class="btn secondary block" type="submit">{{ t("resend_verification") }}</button>
+      </form>
+    {% else %}
+      <p class="error" style="text-align:center;">{{ t("verify_email_invalid") }}</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

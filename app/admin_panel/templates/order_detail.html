@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Заказ #{{ order.id }} — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders" class="active">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/orders" class="status-label">← Все заказы</a></p>
+  <h2>
+    Заказ <span class="mono">#{{ order.id }}</span>
+    <span class="signal filled-{{ STATUS_META[order.status][1] }} color-{{ STATUS_META[order.status][2] }}">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+    </span>
+    <span class="status-label">{{ STATUS_META[order.status][0] }}</span>
+  </h2>
+
+  <div class="card">
+    <div class="field">
+      <div class="label">Клиент</div>
+      {% if order.user %}
+      <div class="value">{{ order.user.full_name or "—" }} {% if order.user.username %}(@{{ order.user.username }}){% endif %}
+        · telegram_id <span class="mono">{{ order.user.telegram_id }}</span></div>
+      {% endif %}
+      {% if order.email %}
+      <div class="value" style="margin-top:4px;">Заказ с сайта (аккаунт) · email: <span class="mono">{{ order.email }}</span></div>
+      {% endif %}
+    </div>
+    <div class="field">
+      <div class="label">Пакет</div>
+      <div class="value">{{ order.package.title }} — {{ order.package.country_name }}</div>
+    </div>
+    <div class="field">
+      <div class="label">Цена</div>
+      <div class="value">{{ order.price_charged }} {{ order.currency }}</div>
+    </div>
+    <div class="field">
+      <div class="label">esimaccess order id</div>
+      <div class="value mono">{{ order.esimaccess_order_no or "—" }}</div>
+    </div>
+    <div class="field">
+      <div class="label">ICCID</div>
+      <div class="value mono">{{ order.iccid or "—" }}</div>
+    </div>
+    {% if order.qr_code_data %}
+    <div class="field">
+      <div class="label">QR-код активации</div>
+      <div class="value"><img src="{{ order.qr_code_data }}" alt="QR" style="width:140px; border-radius:8px;"></div>
+    </div>
+    {% endif %}
+    {% if order.activation_instructions %}
+    <div class="field">
+      <div class="label">Код активации (LPA, для ручного ввода)</div>
+      <div class="value mono" style="word-break:break-all;">{{ order.activation_instructions }}</div>
+    </div>
+    {% endif %}
+    <div class="field">
+      <div class="label">Создан</div>
+      <div class="value">{{ order.created_at.strftime("%d.%m.%Y %H:%M") }}</div>
+    </div>
+    {% if order.refund_reason %}
+    <div class="field">
+      <div class="label">Причина возврата</div>
+      <div class="value">{{ order.refund_reason }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if order.esimaccess_order_no and order.status.value == "provisioning" %}
+  <div class="card">
+    <h3 style="margin-top:0;">Проверить у esimaccess</h3>
+    <p class="status-label">
+      Если статус завис на «Оформляется» дольше минуты — скорее всего, вебхук
+      esimaccess ещё не настроен в личном кабинете. Эта кнопка спрашивает у них
+      напрямую, готов ли eSIM, не дожидаясь вебхука.
+    </p>
+    <form method="post" action="/orders/{{ order.id }}/refresh-esimaccess">
+      <button class="btn" type="submit">🔄 Проверить у esimaccess</button>
+    </form>
+  </div>
+  {% endif %}
+
+  {% if order.status.value not in ["refunded"] %}
+  <div class="card">
+    <h3 style="margin-top:0;">Оформить возврат</h3>
+    <form method="post" action="/orders/{{ order.id }}/refund">
+      <div class="field">
+        <textarea name="reason" rows="3" placeholder="Причина возврата (для истории)"></textarea>
+      </div>
+      <button class="btn danger" type="submit">Оформить возврат</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,345 @@
+/* ============================================================
+   Apple / iOS-style — системный шрифтовой стек (-apple-system → SF Pro
+   на устройствах Apple), мягкие микро-градиенты, "стеклянная" плавающая
+   навигация. Тема переключается атрибутом data-theme на <html> (см.
+   app/webapp/shop_static/theme.js) — по умолчанию берётся системная
+   тема устройства, но человек может переключить вручную ползунком в
+   шапке, выбор запоминается (localStorage).
+   ============================================================ */
+
+:root {
+  --bg: #F2F2F7;
+  --surface: #FFFFFF;
+  --surface-secondary: #F9F9FB;
+  --border: #E5E5EA;
+  --text: #1C1C1E;
+  --text-secondary: #6E6E73;
+  --text-tertiary: #AEAEB2;
+  --accent: #007AFF;
+  --accent-gradient: linear-gradient(180deg, #2B9BFF 0%, #0A6EDB 100%);
+  --hero-gradient: linear-gradient(180deg, #1C1C1E 0%, #3A3A3C 100%);
+  --icon-bg-gradient: linear-gradient(180deg, #EAF3FF 0%, #DCEBFF 100%);
+  --navbar-bg: rgba(255, 255, 255, 0.72);
+  --glow-1: rgba(43, 155, 255, 0.10);
+  --glow-2: rgba(175, 82, 222, 0.08);
+  --radius-lg: 22px;
+  --radius-md: 14px;
+  --max-width: 1080px;
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --shadow-float: 0 8px 30px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05);
+}
+
+[data-theme="dark"] {
+  --bg: #0B0B0F;
+  --surface: #1C1C1E;
+  --surface-secondary: #2C2C2E;
+  --border: #38383A;
+  --text: #FFFFFF;
+  --text-secondary: #98989D;
+  --text-tertiary: #636366;
+  --accent: #0A84FF;
+  --accent-gradient: linear-gradient(180deg, #409CFF 0%, #0A6EDB 100%);
+  --hero-gradient: linear-gradient(180deg, #FFFFFF 0%, #C7C7CC 100%);
+  --icon-bg-gradient: linear-gradient(180deg, #14263E 0%, #0F1E33 100%);
+  --navbar-bg: rgba(28, 28, 30, 0.62);
+  --glow-1: rgba(43, 130, 255, 0.28);
+  --glow-2: rgba(191, 90, 242, 0.22);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  --shadow-float: 0 8px 30px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Мягкое размытое свечение на фоне — почти незаметно в светлой теме,
+   но именно оно спасает тёмную тему от плоского "просто чёрного" фона. */
+body::before, body::after {
+  content: "";
+  position: fixed;
+  width: 620px; height: 620px;
+  border-radius: 50%;
+  filter: blur(120px);
+  z-index: -1;
+  pointer-events: none;
+}
+body::before { top: -220px; left: -160px; background: var(--glow-1); }
+body::after { bottom: -260px; right: -180px; background: var(--glow-2); }
+
+a { color: inherit; text-decoration: none; }
+
+/* --- "Стеклянная" плавающая навигация --- */
+.navbar-wrap {
+  position: sticky;
+  top: 16px;
+  z-index: 50;
+  padding: 0 16px;
+  margin-bottom: 8px;
+}
+.navbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 22px;
+  max-width: var(--max-width);
+  margin: 0 auto;
+  background: var(--navbar-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 999px;
+  box-shadow: var(--shadow-float);
+}
+.navbar .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.navbar .nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
+.navbar .nav-links a { color: var(--text-secondary); }
+.navbar .nav-links a:hover { color: var(--text); }
+.navbar .nav-links a.cta {
+  background: var(--accent-gradient);
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 999px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(10,110,219,0.30);
+}
+.lang-switch { display: flex; gap: 4px; }
+.lang-switch a {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: var(--surface-secondary);
+}
+.lang-switch a.active { background: var(--accent-gradient); color: #fff; }
+
+/* --- Переключатель темы (ползунок) --- */
+.theme-toggle {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+}
+.theme-toggle::before, .theme-toggle::after {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 11px;
+  line-height: 1;
+}
+.theme-toggle::before { content: "☀️"; left: 6px; }
+.theme-toggle::after { content: "🌙"; right: 6px; }
+.theme-toggle .knob {
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+[data-theme="dark"] .theme-toggle .knob { transform: translateX(24px); }
+
+/* --- Layout --- */
+.container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
+.container.narrow { max-width: 520px; }
+.section { padding: 56px 0; }
+
+/* --- Hero --- */
+.hero { padding: 88px 0 64px; text-align: center; }
+.hero h1 {
+  font-size: 44px; font-weight: 800; letter-spacing: -0.02em;
+  margin: 0 0 20px; max-width: 720px; margin-left: auto; margin-right: auto;
+  background: var(--hero-gradient);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.hero p { font-size: 17px; color: var(--text-secondary); max-width: 560px; margin: 0 auto 32px; }
+
+/* --- Buttons --- */
+.btn {
+  display: inline-block;
+  padding: 15px 30px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(10,110,219,0.32);
+}
+.btn:active { transform: scale(0.98); }
+.btn.block { display: block; width: 100%; }
+.btn.secondary {
+  background: var(--surface-secondary);
+  border: none;
+  color: var(--text);
+  box-shadow: none;
+}
+
+/* --- Feature grid --- */
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.feature-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 30px;
+  box-shadow: var(--shadow-card);
+}
+.feature-card .icon {
+  font-size: 24px;
+  width: 52px; height: 52px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--icon-bg-gradient);
+  border-radius: 16px;
+  margin-bottom: 16px;
+}
+.feature-card h3 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
+.feature-card p { font-size: 14px; color: var(--text-secondary); margin: 0; }
+
+/* --- How it works --- */
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; }
+.step { text-align: center; }
+.step .num {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  margin: 0 auto 14px;
+  box-shadow: 0 4px 12px rgba(10,110,219,0.28);
+}
+.step h3 { font-size: 15px; margin: 0 0 6px; font-weight: 600; }
+.step p { font-size: 13px; color: var(--text-secondary); margin: 0; }
+
+h2.section-title { font-size: 28px; font-weight: 800; text-align: center; margin: 0 0 40px; letter-spacing: -0.01em; }
+
+/* --- Rows --- */
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-card);
+}
+.row:hover { background: var(--surface-secondary); }
+.row .name { font-size: 15px; font-weight: 500; }
+.row .meta { color: var(--text-secondary); font-size: 13px; }
+
+/* --- Cards / forms --- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+}
+.field { margin-bottom: 16px; }
+.field label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
+.field input {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 15px;
+}
+.field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.error { color: #FF3B30; font-size: 14px; margin-bottom: 16px; }
+.hint { color: var(--text-secondary); font-size: 13px; }
+.divider { text-align: center; color: var(--text-secondary); font-size: 13px; margin: 20px 0; }
+
+.status-badge {
+  display: inline-block;
+  padding: 7px 16px;
+  border-radius: 999px;
+  background: var(--surface-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.qr-image { display: block; width: 200px; border-radius: 18px; margin: 20px auto; background: #fff; padding: 12px; box-shadow: var(--shadow-card); }
+.mono { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
+
+/* --- Чат (лаунж/туры/поддержка) --- */
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 320px;
+  max-height: 56vh;
+  overflow-y: auto;
+  padding: 4px;
+  margin-bottom: 16px;
+}
+.bubble { max-width: 78%; padding: 10px 14px; border-radius: 18px; font-size: 15px; line-height: 1.4; }
+.bubble.mine { align-self: flex-end; background: var(--accent-gradient); color: #fff; border-bottom-right-radius: 5px; }
+.bubble.theirs { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 5px; box-shadow: var(--shadow-card); }
+.chat-image { display: block; max-width: 220px; max-height: 220px; border-radius: 14px; margin-bottom: 4px; }
+.chat-file { display: inline-block; font-size: 13px; text-decoration: underline; margin-bottom: 4px; }
+.composer {
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  background: var(--surface);
+  border-radius: 999px;
+  box-shadow: var(--shadow-card);
+}
+.composer input {
+  flex: 1;
+  padding: 10px 14px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+}
+.composer input:focus { outline: none; }
+.composer .send-btn {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+/* --- Footer --- */
+.footer {
+  padding: 32px 0 48px;
+  margin-top: 32px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .navbar { padding: 10px 16px; flex-wrap: wrap; gap: 10px; border-radius: 24px; }
+  .hero h1 { font-size: 32px; }
+  .features, .steps { grid-template-columns: 1fr; }
+  .section { padding: 40px 0; }
+}

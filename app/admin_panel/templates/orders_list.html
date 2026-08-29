@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Заказы — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders" class="active">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Заказы</h2>
+
+  <div class="filters">
+    <a href="/orders" class="{{ 'active' if not current_status else '' }}">Все</a>
+    {% for s in statuses %}
+      <a href="/orders?status={{ s.value }}" class="{{ 'active' if current_status == s.value else '' }}">
+        {{ STATUS_META[s][0] }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Статус</th>
+        <th>№</th>
+        <th>Клиент</th>
+        <th>Пакет</th>
+        <th>Цена</th>
+        <th>Создан</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for order in orders %}
+      <tr onclick="location.href='/orders/{{ order.id }}'">
+        <td>
+          <span class="signal filled-{{ STATUS_META[order.status][1] }} color-{{ STATUS_META[order.status][2] }}">
+            <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+          </span>
+          <span class="status-label">{{ STATUS_META[order.status][0] }}</span>
+        </td>
+        <td class="mono">#{{ order.id }}</td>
+        <td>{{ order.email if order.email else (order.user.full_name or order.user.username or order.user.telegram_id) }}</td>
+        <td>{{ order.package.title }}</td>
+        <td>{{ order.price_charged }} {{ order.currency }}</td>
+        <td class="status-label">{{ order.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="status-label">Заказов пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}{{ topic_label }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <p><a href="/shop/account/chats" class="hint">{{ t("my_chats_title") }}</a></p>
+    <h2 class="section-title">{{ topic_label }}</h2>
+
+    <div id="chat-messages" class="chat-messages"></div>
+
+    <form id="chat-form" class="composer">
+      <input id="chat-input" type="text" placeholder="{{ t('chat_input_placeholder') }}" autocomplete="off">
+      <button class="send-btn" type="submit">➤</button>
+    </form>
+  </div>
+</section>
+
+<script>
+(function () {
+  const conversationId = {{ conversation_id }};
+  const messagesEl = document.getElementById("chat-messages");
+  const form = document.getElementById("chat-form");
+  const input = document.getElementById("chat-input");
+
+  function escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function renderBubble(m) {
+    let attachmentHtml = "";
+    if (m.attachment_url && m.attachment_type === "photo") {
+      attachmentHtml = `<a href="${m.attachment_url}" target="_blank"><img class="chat-image" src="${m.attachment_url}"></a>`;
+    } else if (m.attachment_url) {
+      attachmentHtml = `<a class="chat-file" href="${m.attachment_url}" target="_blank">📎 ${escapeHtml(m.attachment_filename || "file")}</a>`;
+    }
+    const textHtml = m.text ? `<div>${escapeHtml(m.text)}</div>` : "";
+    const side = m.direction === "in" ? "mine" : "theirs";
+    return `<div class="bubble ${side}">${attachmentHtml}${textHtml}</div>`;
+  }
+
+  async function loadMessages() {
+    try {
+      const res = await fetch(`/shop/api/chat/${conversationId}/messages`);
+      if (!res.ok) return;
+      const messages = await res.json();
+      const wasAtBottom = messagesEl.scrollTop + messagesEl.clientHeight >= messagesEl.scrollHeight - 20;
+      messagesEl.innerHTML = messages.map(renderBubble).join("");
+      if (wasAtBottom || messages.length <= 1) {
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      }
+    } catch (e) { /* временная ошибка сети — пробуем на следующем тике */ }
+  }
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    try {
+      await fetch(`/shop/api/chat/${conversationId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: `text=${encodeURIComponent(text)}`,
+      });
+      await loadMessages();
+    } catch (e) {
+      input.value = text;
+    }
+  });
+
+  loadMessages();
+  setInterval(loadMessages, 3000);
+})();
+</script>
+{% endblock %}

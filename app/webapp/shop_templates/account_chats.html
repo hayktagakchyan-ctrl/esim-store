@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ t("my_chats_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("my_chats_title") }}</h2>
+
+    {% for c in chats %}
+    <a class="row" href="/shop/chat/{{ c.id }}">
+      <span class="name">{{ c.topic_label }}</span>
+      <span class="meta">{{ c.last_message_preview or "" }} ›</span>
+    </a>
+    {% else %}
+    <p class="hint" style="text-align:center;">{{ t("my_chats_empty") }}</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

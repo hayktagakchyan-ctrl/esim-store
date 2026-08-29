@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Пакеты — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages" class="active">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Пакеты каталога</h2>
+  <p class="status-label" style="margin-bottom:16px;">
+    Пока список пакетов esimaccess ("Query All Data Packages") не подтверждён их
+    документацией, эти строки нужно вносить вручную — код пакета и цену можно
+    посмотреть в личном кабинете esimaccess.
+  </p>
+
+  <p>
+    <a class="btn" href="/packages/new">+ Добавить пакет</a>
+  </p>
+  <p class="status-label" style="margin-bottom:16px;">
+    Кнопка «🧪 Тест» у пакета создаёт тестовый заказ, сразу помеченный оплаченным,
+    и отправляет его в esimaccess по-настоящему (спишет с твоего баланса) — так
+    можно проверить, что интеграция реально работает, не разбираясь пока с оплатой.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Страна</th>
+        <th>Название</th>
+        <th>Код esimaccess</th>
+        <th>Закупка</th>
+        <th>Цена клиенту</th>
+        <th>Активен</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for package in packages %}
+      <tr onclick="location.href='/packages/{{ package.id }}/edit'">
+        <td>{{ package.country_name }} <span class="status-label">({{ package.country_code }})</span></td>
+        <td>{{ package.title }}</td>
+        <td class="mono">{{ package.esimaccess_package_code }}</td>
+        <td>{{ package.cost_price }} {{ package.currency }}</td>
+        <td>{{ package.sell_price }} {{ package.currency }}</td>
+        <td>{{ "Да" if package.is_active else "Нет" }}</td>
+        <td onclick="event.stopPropagation()">
+          <form method="post" action="/orders/test-order" onsubmit="return confirm('Создать тестовый заказ и реально отправить его в esimaccess (спишет деньги с баланса)?');">
+            <input type="hidden" name="package_id" value="{{ package.id }}">
+            <button class="btn" type="submit" style="padding:4px 10px; font-size:12px;">🧪 Тест</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="status-label">Пакетов пока нет — добавь первый.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

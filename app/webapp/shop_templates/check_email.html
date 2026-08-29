@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ t("check_email_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("check_email_title") }}</h2>
+    <p class="hint" style="text-align:center;">{{ t("check_email_text") }} <strong>{{ email }}</strong></p>
+
+    <form method="post" action="/shop/resend-verification" style="margin-top:20px;">
+      <input type="hidden" name="email" value="{{ email }}">
+      <input type="hidden" name="next" value="{{ next }}">
+      <button class="btn secondary block" type="submit">{{ t("resend_verification") }}</button>
+    </form>
+
+    <p class="divider"><a href="/shop/login">{{ t("login_title") }}</a></p>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,422 @@
+/* ============================================================
+   Apple / iOS-style design — SF Pro (через системный стек шрифтов
+   -apple-system, который на устройствах Apple САМ рендерится как
+   SF Pro — отдельно грузить шрифт не нужно и нельзя, он лицензионно
+   закрыт), мягкие микро-градиенты, плавающий таб-бар.
+
+   Светлая и тёмная тема — переключается автоматически по теме
+   Telegram (colorScheme), см. applyTheme() в app.js.
+   ============================================================ */
+
+:root {
+  --bg: #F2F2F7;              /* iOS systemGroupedBackground */
+  --surface: #FFFFFF;
+  --surface-secondary: #F9F9FB;
+  --border: #E5E5EA;
+  --text: #1C1C1E;            /* iOS label */
+  --text-secondary: #6E6E73;  /* iOS secondaryLabel */
+  --text-tertiary: #AEAEB2;   /* iOS tertiaryLabel / placeholder */
+  --accent: #007AFF;          /* iOS systemBlue */
+  --accent-gradient: linear-gradient(180deg, #2B9BFF 0%, #0A6EDB 100%);
+  --danger: #FF3B30;
+  --success: #34C759;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
+  --shadow-float: 0 8px 30px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06);
+  --glow-1: rgba(43, 155, 255, 0.08);
+  --glow-2: rgba(175, 82, 222, 0.06);
+  --glass-bg: rgba(242, 242, 247, 0.82);
+  --glass-border: rgba(0, 0, 0, 0.06);
+}
+
+/* Тёмная тема — палитра из iOS Dark Mode (истинно чёрный фон, как в системных
+   приложениях Apple на OLED-экранах). Переключается через data-theme на <html>,
+   см. applyTheme() в app.js — по системной теме Telegram, либо вручную кнопкой. */
+[data-theme="dark"] {
+  --bg: #000000;
+  --surface: #1C1C1E;
+  --surface-secondary: #2C2C2E;
+  --border: #38383A;
+  --text: #FFFFFF;
+  --text-secondary: #98989D;
+  --text-tertiary: #636366;
+  --accent: #0A84FF;
+  --accent-gradient: linear-gradient(180deg, #409CFF 0%, #0A6EDB 100%);
+  --danger: #FF453A;
+  --success: #32D74B;
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
+  --shadow-float: 0 8px 30px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+  --glow-1: rgba(43, 130, 255, 0.24);
+  --glow-2: rgba(191, 90, 242, 0.18);
+  --glass-bg: rgba(28, 28, 30, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .category-emoji,
+[data-theme="dark"] .feature-card .icon {
+  background: linear-gradient(180deg, #14263E 0%, #0F1E33 100%);
+}
+
+body { transition: background-color 0.2s ease, color 0.2s ease; }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Мягкое размытое свечение на фоне — то же решение, что и на сайте, для
+   единого фирменного вида; в тёмной теме особенно спасает от плоского чёрного. */
+body::before, body::after {
+  content: "";
+  position: fixed;
+  width: 380px; height: 380px;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: 0;
+  pointer-events: none;
+}
+body::before { top: -140px; left: -120px; background: var(--glow-1); }
+body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
+
+#app { position: relative; z-index: 1; }
+
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* --- Верхняя панель: тоже "плавающая", с блюром, как навбар в iOS --- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--glass-border);
+}
+.topbar h1 {
+  font-size: 20px;
+  font-weight: 700;      /* Title 3 / bold, ближе к SF Pro Display Bold */
+  letter-spacing: -0.01em;
+  margin: 0;
+  flex: 1;
+}
+
+.lang-switch { display: flex; gap: 4px; }
+.lang-btn {
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 9px;
+  border-radius: 999px;
+}
+.lang-btn.active { color: #fff; background: var(--accent-gradient); }
+
+.theme-toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  padding: 0;
+  margin-left: 6px;
+}
+.theme-toggle::before, .theme-toggle::after {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 9px;
+  line-height: 1;
+}
+.theme-toggle::before { content: "☀️"; left: 5px; }
+.theme-toggle::after { content: "🌙"; right: 5px; }
+.theme-toggle .knob {
+  position: absolute;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  transition: transform 0.2s ease;
+}
+[data-theme="dark"] .theme-toggle .knob { transform: translateX(20px); }
+
+.icon-btn {
+  border: none;
+  background: none;
+  font-size: 19px;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* --- Экраны: отступ снизу, чтобы контент не прятался под плавающим таб-баром --- */
+.screen {
+  flex: 1;
+  padding: 16px 18px calc(96px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+/* Баг, который был на проде: .chat-screen ниже задаёт display:flex классом —
+   а у класса приоритет выше, чем у обычного атрибута [hidden] в UA-стилях,
+   поэтому композер (поле ввода) оставался виден ВСЕГДА, даже на главном
+   экране, а не только внутри открытого чата. Эта строка гарантированно
+   перебивает любой display, если атрибут hidden стоит — вне зависимости
+   от порядка правил в файле. */
+main.screen[hidden] { display: none !important; }
+
+/* --- Поиск / инпуты в стиле iOS (капсула, заполненный серый фон) --- */
+.search, .field select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+.search::placeholder { color: var(--text-tertiary); }
+
+/* --- Карточки категорий на главном экране --- */
+.category-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.category-card:active { transform: scale(0.98); }
+.category-emoji {
+  font-size: 26px;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #EAF3FF 0%, #DCEBFF 100%);
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.category-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.category-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* --- Списки (страны, чаты и т.п.) — сгруппированные iOS-style ряды --- */
+.list {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.row:last-child { border-bottom: none; }
+.row:active { background: var(--surface-secondary); }
+.row .flag { font-size: 22px; }
+.row .main { flex: 1; min-width: 0; }
+.row .title { font-size: 16px; font-weight: 500; }
+.row .subtitle {
+  font-size: 13px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row .chevron { color: var(--text-tertiary); font-size: 18px; }
+
+.package-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 15px 16px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.package-row .price { font-weight: 600; color: var(--accent); }
+
+/* --- Карточки / чекаут --- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+}
+.card .row-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 15px;
+}
+.card .row-line.total {
+  font-weight: 700;
+  font-size: 17px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+/* --- Кнопки — мягкий градиент, как системная синяя кнопка iOS --- */
+.primary-btn {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(10, 110, 219, 0.32);
+}
+.primary-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(10,110,219,0.28); }
+.primary-btn.test-btn {
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  border: 1.5px dashed var(--text-tertiary);
+  box-shadow: none;
+}
+
+.hint { font-size: 13px; color: var(--text-secondary); text-align: center; margin: 12px 0; }
+
+/* --- Мои eSIM --- */
+.esim-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+.esim-card .status { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.esim-card .iccid { font-family: ui-monospace, monospace; font-size: 12px; margin-top: 6px; word-break: break-all; color: var(--text-secondary); }
+.qr-image { display: block; width: 168px; height: 168px; margin: 12px auto; border-radius: 16px; background: #fff; padding: 10px; box-shadow: var(--shadow-card); }
+
+/* --- Товары (лаунж/туры) --- */
+.product-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+.product-title { font-size: 16px; font-weight: 600; }
+.product-description { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.product-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.product-price { font-weight: 700; font-size: 15px; color: var(--accent); }
+.ask-btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* --- Чат --- */
+.chat-screen { padding: 0 !important; display: flex; flex-direction: column; }
+.messages { flex: 1; padding: 16px 18px calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
+.bubble { max-width: 78%; padding: 10px 14px; border-radius: 18px; font-size: 15px; line-height: 1.4; }
+.bubble.mine { align-self: flex-end; background: var(--accent-gradient); color: #fff; border-bottom-right-radius: 5px; }
+.bubble.theirs { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 5px; box-shadow: var(--shadow-card); }
+.chat-image { display: block; max-width: 200px; max-height: 200px; border-radius: 14px; margin-bottom: 4px; }
+.chat-file { display: inline-block; font-size: 13px; text-decoration: underline; margin-bottom: 4px; }
+
+.composer {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-radius: 999px;
+  box-shadow: var(--shadow-float);
+  z-index: 15;
+}
+.composer input {
+  flex: 1;
+  padding: 10px 6px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+}
+.composer input:focus { outline: none; }
+.attach-btn { border: none; background: none; font-size: 20px; cursor: pointer; flex-shrink: 0; padding: 0 2px; }
+.send-btn {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+/* композер плавает поверх контента чата — добавляем запас снизу списку сообщений */
+.messages { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
+
+.empty { color: var(--text-tertiary); font-size: 14px; text-align: center; padding: 32px 0; }
+
+/* ============================================================
+   Плавающий таб-бар — визитная карточка iOS: капсула с отступами
+   от краёв экрана, "стеклянный" блюр-фон, тень, всегда видна.
+   ============================================================ */
+.tabbar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 28px;
+  box-shadow: var(--shadow-float);
+  z-index: 30;
+}
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 0;
+  border-radius: 18px;
+  transition: color 0.15s ease;
+}
+.tab-btn.active { color: var(--accent); }
+.tab-icon { font-size: 21px; }

@@ -39,7 +39,15 @@ async def esimaccess_webhook(request: Request):
         if client_ip not in _ALLOWED_IPS:
             raise HTTPException(status_code=403, detail="IP не в списке разрешённых")
 
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception:
+        # esimaccess (или любой другой health-check) вполне может прислать пустое
+        # тело или что-то не строго в формате JSON просто чтобы проверить, что
+        # адрес вообще отвечает — падать на этом нельзя, иначе первая же попытка
+        # подключить вебхук в их личном кабинете будет считаться неудачной.
+        return {"ok": True}
+
     notify_type = payload.get("notifyType")
     notify_id = payload.get("notifyId")
     content = payload.get("content", {})

@@ -23,7 +23,12 @@ from app.webapp.payments import _fulfill_order
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="eSIM Store — Админка")
+app = FastAPI(
+    title="eSIM Store — Админка",
+    docs_url=None if settings.SECURE_COOKIES else "/docs",
+    redoc_url=None if settings.SECURE_COOKIES else "/redoc",
+    openapi_url=None if settings.SECURE_COOKIES else "/openapi.json",
+)
 
 
 @app.on_event("startup")

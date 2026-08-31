@@ -27,7 +27,16 @@ from app.webapp import webhooks, payments, products, conversations, admin_chat, 
 
 BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI(title="eSIM Store — Mini App API")
+app = FastAPI(
+    title="eSIM Store — Mini App API",
+    # Swagger/ReDoc показывают полную карту всех эндпоинтов системы всем подряд —
+    # удобно при разработке, но в проде это просто лишняя разведка для чужих
+    # глаз без всякой пользы (это не публичный API-продукт). Выключаем там, где
+    # SECURE_COOKIES=true (то есть на Railway), оставляем локально.
+    docs_url=None if settings.SECURE_COOKIES else "/docs",
+    redoc_url=None if settings.SECURE_COOKIES else "/redoc",
+    openapi_url=None if settings.SECURE_COOKIES else "/openapi.json",
+)
 
 
 @app.on_event("startup")

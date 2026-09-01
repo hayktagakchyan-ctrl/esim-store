@@ -560,12 +560,22 @@ async def verify_email(request: Request, token: str):
         if account is None:
             return await render(request, "verify_email_result.html", success=False, expired=False)
 
+        if account.is_verified:
+            # Уже подтверждено — сюда попадаем, когда по ссылке кто-то переходит повторно.
+            # Это нормально и ожидаемо: пока не настроен SMTP, ссылка приходит обычным
+            # сообщением в Telegram, а Telegram сам иногда переходит по ссылкам в
+            # сообщениях, чтобы сделать превью — то есть настоящий клик человека может
+            # оказаться уже вторым по счёту. Раньше здесь стирался токен после первого
+            # перехода, и настоящий клик после превью-бота показывал ложную ошибку.
+            request.session["account_id"] = account.id
+            return await render(request, "verify_email_result.html", success=True, expired=False)
+
         if account.verification_sent_at is None or datetime.utcnow() - account.verification_sent_at > VERIFICATION_TOKEN_TTL:
             return await render(request, "verify_email_result.html", success=False, expired=True, email=account.email)
 
         account.is_verified = True
-        account.verification_token = None
         account.verification_sent_at = None
+        # Токен намеренно НЕ обнуляем — см. комментарий выше про повторные переходы.
         await session.commit()
         account_id = account.id
 

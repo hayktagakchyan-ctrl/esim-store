@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_FROM_EMAIL: str = "noreply@example.com"
+    SMTP_FROM_NAME: str = "eSIM Store"  # то, что клиент увидит как имя отправителя вместо голого адреса
     SMTP_USE_TLS: bool = True
 
     # --- Оплата: Idram (AMD, карты/счёт Idram) ---
@@ -92,6 +93,11 @@ class Settings(BaseSettings):
     # Локально при разработке (http://localhost) оставь false, иначе логин не
     # сохранится — браузер просто не примет cookie без https.
     SECURE_COOKIES: bool = False
+
+    # Наценка по умолчанию при импорте пакетов из esimaccess (см. /packages/import
+    # в админке) — например 50 значит цена клиенту = закупочная × 1.5. Можно
+    # менять цену вручную у каждого пакета после импорта, это только стартовое значение.
+    ESIMACCESS_DEFAULT_MARKUP_PERCENT: float = 50.0
 
 
 settings = Settings()

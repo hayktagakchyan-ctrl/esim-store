@@ -5,7 +5,7 @@
 from fastapi import Request
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
-    "brand": {"ru": "eSIM Store", "hy": "eSIM Store", "en": "eSIM Store"},
+    "brand": {"ru": "KaLine", "hy": "KaLine", "en": "KaLine"},
 
     "nav_catalog": {"ru": "Тарифы", "hy": "Սակագներ", "en": "Plans"},
     "nav_services": {"ru": "Другие услуги", "hy": "Այլ ծառայություններ", "en": "Other services"},
@@ -267,6 +267,50 @@ price are agreed in chat before payment.</p>
 <p><strong>Limitation of liability.</strong> We are not liable for outages of third-party
 services (esimaccess, payment providers, mobile carriers) that the service depends on.</p>
 """,
+    },
+
+    "password_confirm_label": {"ru": "Повтори пароль", "hy": "Կրկնիր գաղտնաբառը", "en": "Confirm password"},
+    "show_all_countries": {"ru": "Показать все страны", "hy": "Ցույց տալ բոլոր երկրները", "en": "Show all countries"},
+
+    "nav_support": {"ru": "Поддержка", "hy": "Աջակցություն", "en": "Support"},
+    "nav_settings": {"ru": "Настройки", "hy": "Կարգավորումներ", "en": "Settings"},
+
+    "settings_title": {"ru": "Настройки аккаунта", "hy": "Հաշվի կարգավորումներ", "en": "Account settings"},
+    "settings_email_label": {"ru": "Email аккаунта", "hy": "Հաշվի էլ. փոստ", "en": "Account email"},
+    "settings_change_password_title": {"ru": "Сменить пароль", "hy": "Փոխել գաղտնաբառը", "en": "Change password"},
+    "current_password_label": {"ru": "Текущий пароль", "hy": "Ընթացիկ գաղտնաբառ", "en": "Current password"},
+    "new_password_label": {"ru": "Новый пароль", "hy": "Նոր գաղտնաբառ", "en": "New password"},
+    "new_password_confirm_label": {"ru": "Повтори новый пароль", "hy": "Կրկնիր նոր գաղտնաբառը", "en": "Confirm new password"},
+    "settings_save_button": {"ru": "Сохранить", "hy": "Պահպանել", "en": "Save"},
+    "settings_password_changed": {"ru": "Пароль изменён.", "hy": "Գաղտնաբառը փոխվել է։", "en": "Password changed."},
+    "settings_password_wrong_current": {"ru": "Текущий пароль указан неверно.", "hy": "Ընթացիկ գաղտնաբառը սխալ է։", "en": "Current password is incorrect."},
+    "settings_password_mismatch": {"ru": "Новые пароли не совпадают.", "hy": "Նոր գաղտնաբառերը չեն համընկնում։", "en": "New passwords don't match."},
+    "password_too_short": {"ru": "Пароль должен быть не короче 8 символов.", "hy": "Գաղտնաբառը պետք է լինի առնվազն 8 նիշ։", "en": "Password must be at least 8 characters."},
+
+    "faq_title": {"ru": "Частые вопросы", "hy": "Հաճախակի հարցեր", "en": "FAQ"},
+    "faq_q1": {"ru": "Как быстро активируется eSIM?", "hy": "Որքա՞ն արագ է ակտիվանում eSIM-ը", "en": "How fast does the eSIM activate?"},
+    "faq_a1": {
+        "ru": "Сразу после подтверждения оплаты — QR-код появляется на странице заказа обычно в течение минуты.",
+        "hy": "Վճարման հաստատումից անմիջապես հետո՝ QR-կոդը սովորաբար հայտնվում է րոպեների ընթացքում։",
+        "en": "Right after payment confirmation — the QR code usually appears within a minute.",
+    },
+    "faq_q2": {"ru": "Нужен ли отдельный номер телефона?", "hy": "Անհրաժե՞շտ է առանձին հեռախոսահամար", "en": "Do I need a separate phone number?"},
+    "faq_a2": {
+        "ru": "Нет — eSIM даёт только интернет, звонки и СМС остаются на твоей основной SIM-карте.",
+        "hy": "Ոչ, eSIM-ը տալիս է միայն ինտերնետ, զանգերն ու SMS-ները մնում են հիմնական SIM-ի վրա։",
+        "en": "No — the eSIM only provides data; calls and SMS stay on your regular SIM.",
+    },
+    "faq_q3": {"ru": "Что если оплата прошла, а eSIM не пришёл?", "hy": "Իսկ եթե վճարումը եղավ, բայց eSIM-ը չեկա՞վ", "en": "What if I paid but didn't receive the eSIM?"},
+    "faq_a3": {
+        "ru": "Напиши нам в поддержку прямо на сайте (кнопка в шапке) или в Telegram-боте — разберёмся быстро.",
+        "hy": "Գրիր մեզ աջակցությանը կայքում (կոճակը վերևում) կամ Telegram-բոտում — արագ կլուծենք։",
+        "en": "Message support right here on the site (button in the header) or via the Telegram bot — we'll sort it out fast.",
+    },
+    "faq_q4": {"ru": "На каких устройствах работает eSIM?", "hy": "Ո՞ր սարքերում է աշխատում eSIM-ը", "en": "Which devices support eSIM?"},
+    "faq_a4": {
+        "ru": "На большинстве смартфонов последних лет (iPhone начиная с XR/XS, многие Android-флагманы). Перед покупкой проверь в настройках телефона, поддерживает ли он eSIM.",
+        "hy": "Վերջին տարիների սմարթֆոնների մեծ մասում (iPhone XR/XS-ից սկսած, շատ Android-ֆլագմաններ)։",
+        "en": "Most recent smartphones (iPhone XR/XS and later, many Android flagships). Check your phone's settings before buying to confirm eSIM support.",
     },
 }
 

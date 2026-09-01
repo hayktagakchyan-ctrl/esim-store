@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ t("settings_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("settings_title") }}</h2>
+
+    <div class="card">
+      <div class="field">
+        <label>{{ t("settings_email_label") }}</label>
+        <input type="email" value="{{ account.email }}" disabled>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("settings_change_password_title") }}</h3>
+      {% if success %}<p class="hint" style="color:#34C759;">{{ t("settings_password_changed") }}</p>{% endif %}
+      {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
+      <form method="post" action="/shop/account/settings">
+        <div class="field">
+          <label for="current_password">{{ t("current_password_label") }}</label>
+          <input type="password" id="current_password" name="current_password" required>
+        </div>
+        <div class="field">
+          <label for="new_password">{{ t("new_password_label") }}</label>
+          <input type="password" id="new_password" name="new_password" required minlength="8">
+        </div>
+        <div class="field">
+          <label for="new_password_confirm">{{ t("new_password_confirm_label") }}</label>
+          <input type="password" id="new_password_confirm" name="new_password_confirm" required minlength="8">
+        </div>
+        <button class="btn block" type="submit">{{ t("settings_save_button") }}</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% endblock %}

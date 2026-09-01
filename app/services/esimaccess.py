@@ -188,13 +188,54 @@ class ESimAccessClient:
         result = await self._post("/api/v1/open/esim/order", payload)
         return result["orderNo"]
 
-    # --- ЗАГЛУШКА — ждёт страницу "Query All Data Packages" ---
+    # --- НЕ ПОДТВЕРЖДЕНО ДОКУМЕНТАЦИЕЙ — см. docstring ниже ---
 
-    async def list_packages(self, country_code: str | None = None) -> list[dict]:
-        raise NotImplementedError(
-            "Путь и формат ответа для списка пакетов с ценами пока не подтверждены "
-            "документацией — пришли страницу 'Query All Data Packages'."
+    async def list_packages(self, location_code: str | None = None) -> list[dict]:
+        """
+        Путь эндпоинта и формат ответа НЕ подтверждены документацией esimaccess —
+        угадано по аналогии с остальными эндпоинтами (все следуют схеме
+        "ресурс/действие": esim/order, esim/query, balance/query, location/list).
+
+        Перед тем как полагаться на это по-настоящему — проверь кнопкой
+        «🧪 Тест импорта» в админке (/products... то есть /packages/import) на
+        одной стране. Если придёт ошибка или пустой список — значит путь/формат
+        ответа отличается от угаданного, тогда нужно либо получить страницу
+        "Query All Data Packages" из документации esimaccess, либо разобрать
+        реальный ответ по логам ошибки.
+
+        Поля пакета в ответе — тоже по аналогии с тем, что уже подтверждено в
+        других местах их API: rawPrice (целое, /10000 = доллары — та же схема,
+        что и в create_order), slug/packageCode, volume (байты), duration.
+        """
+        payload: dict = {"pager": {"pageNum": 1, "pageSize": 200}}
+        if location_code:
+            payload["locationCode"] = location_code
+
+        result = await self._post("/api/v1/open/package/list", payload)
+
+        raw_list = (
+            result.get("packageList")
+            or result.get("list")
+            or result.get("packages")
+            or (result if isinstance(result, list) else [])
         )
+
+        packages = []
+        for item in raw_list:
+            raw_price = item.get("rawPrice")
+            cost_price = (raw_price / 10000) if raw_price is not None else None
+            volume_bytes = item.get("volume") or item.get("totalVolume")
+            data_amount_mb = round(volume_bytes / (1024 * 1024)) if volume_bytes else None
+            packages.append({
+                "package_code": item.get("slug") or item.get("packageCode"),
+                "title": item.get("name") or item.get("title") or "",
+                "cost_price": cost_price,
+                "data_amount_mb": data_amount_mb,
+                "validity_days": item.get("duration") or item.get("totalDuration"),
+                "country_code": item.get("locationCode") or location_code,
+                "raw": item,
+            })
+        return packages
 
 
 esimaccess_client = ESimAccessClient()

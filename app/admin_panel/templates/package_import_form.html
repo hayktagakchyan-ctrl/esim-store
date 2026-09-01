@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Импорт из esimaccess — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages" class="active">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/packages" class="status-label">← Все пакеты</a></p>
+  <h2>Импорт пакетов из esimaccess</h2>
+  <p class="status-label" style="margin-bottom:16px;">
+    ⚠️ Путь запроса к esimaccess для списка пакетов не подтверждён их документацией —
+    угадан по аналогии с остальными эндпоинтами. Проверь сначала на одной стране —
+    если ничего не пришло или ошибка, значит угадано неверно, нужно уточнять у esimaccess.
+  </p>
+
+  {% if imported %}
+  <div class="card" style="border-color: var(--accent-green, #2ecc71);">
+    <strong>Готово.</strong> Всего в ответе: {{ imported.total }}.
+    Добавлено новых: {{ imported.created }}. Обновлена цена у уже существующих: {{ imported.updated }}.
+    Пропущено (не хватило данных): {{ imported.skipped }}.
+  </div>
+  {% endif %}
+
+  {% if error %}
+  <div class="card" style="border-color: var(--accent-red, #e74c3c);">
+    <strong>Ошибка:</strong> {{ error }}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="/packages/import">
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Код страны (ISO, напр. IT)</div>
+          <input type="text" name="country_code" required>
+        </div>
+        <div class="field">
+          <div class="label">Название страны (для новых пакетов)</div>
+          <input type="text" name="country_name" required>
+        </div>
+      </div>
+      <div class="field">
+        <div class="label">Наценка, % (цена клиенту = закупка × (1 + это/100))</div>
+        <input type="text" name="markup_percent" value="{{ default_markup }}" required>
+      </div>
+      <button class="btn" type="submit">Импортировать</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -265,6 +265,95 @@ async def packages_list(request: Request, _=Depends(require_login)):
     )
 
 
+@app.get("/packages/import", response_class=HTMLResponse)
+async def package_import_form(request: Request, _=Depends(require_login)):
+    return templates.TemplateResponse(
+        "package_import_form.html",
+        {
+            "request": request, "error": None, "imported": None,
+            "default_markup": settings.ESIMACCESS_DEFAULT_MARKUP_PERCENT,
+        },
+    )
+
+
+@app.post("/packages/import", response_class=HTMLResponse)
+async def package_import_submit(
+    request: Request,
+    country_code: str = Form(...),
+    country_name: str = Form(...),
+    markup_percent: float = Form(...),
+    _=Depends(require_login),
+):
+    country_code = country_code.strip().upper()
+    country_name = country_name.strip()
+
+    try:
+        remote_packages = await esimaccess_client.list_packages(location_code=country_code)
+    except ESimAccessError as exc:
+        return templates.TemplateResponse(
+            "package_import_form.html",
+            {
+                "request": request, "imported": None, "default_markup": markup_percent,
+                "error": f"esimaccess ответил ошибкой: {exc}. Путь/формат этого запроса не "
+                         f"подтверждён их документацией — возможно, угадан неверно.",
+            },
+        )
+    except Exception as exc:
+        return templates.TemplateResponse(
+            "package_import_form.html",
+            {
+                "request": request, "imported": None, "default_markup": markup_percent,
+                "error": f"Не удалось получить список пакетов: {exc}",
+            },
+        )
+
+    created, skipped, updated = 0, 0, 0
+    async with get_session() as session:
+        for item in remote_packages:
+            code = item.get("package_code")
+            cost_price = item.get("cost_price")
+            if not code or cost_price is None:
+                skipped += 1
+                continue
+
+            existing = (
+                await session.execute(select(Package).where(Package.esimaccess_package_code == code))
+            ).scalar_one_or_none()
+
+            sell_price = round(cost_price * (1 + markup_percent / 100), 2)
+
+            if existing is not None:
+                existing.cost_price = cost_price
+                existing.sell_price = sell_price
+                updated += 1
+                continue
+
+            package = Package(
+                country_code=item.get("country_code") or country_code,
+                country_name=country_name,
+                title=item.get("title") or code,
+                esimaccess_package_code=code,
+                data_amount_mb=item.get("data_amount_mb") or 0,
+                validity_days=item.get("validity_days") or 0,
+                cost_price=cost_price,
+                sell_price=sell_price,
+                currency="USD",
+                is_active=True,
+            )
+            session.add(package)
+            created += 1
+
+        await session.commit()
+
+    return templates.TemplateResponse(
+        "package_import_form.html",
+        {
+            "request": request, "error": None, "default_markup": markup_percent,
+            "imported": {"created": created, "updated": updated, "skipped": skipped, "total": len(remote_packages)},
+        },
+    )
+
+
 @app.get("/packages/new", response_class=HTMLResponse)
 async def package_new_form(request: Request, _=Depends(require_login)):
     return templates.TemplateResponse("package_form.html", {"request": request, "package": None})

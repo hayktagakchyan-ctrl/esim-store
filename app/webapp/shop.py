@@ -507,6 +507,7 @@ async def register_submit(
     request: Request,
     email: str = Form(...),
     password: str = Form(...),
+    password_confirm: str = Form(...),
     next: str = Form("/shop/"),
     agree: bool = Form(False),
 ):
@@ -517,6 +518,8 @@ async def register_submit(
         return await render(request, "register.html", error="Введите настоящий email.", next=next)
     if len(password) < 8:
         return await render(request, "register.html", error="Пароль должен быть не короче 8 символов.", next=next)
+    if password != password_confirm:
+        return await render(request, "register.html", error="Пароли не совпадают.", next=next)
 
     async with get_session() as session:
         existing = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
@@ -712,3 +715,37 @@ async def my_orders(request: Request):
             await session.refresh(o, attribute_names=["package"])
 
     return await render(request, "account_orders.html", orders=orders, status_keys=STATUS_KEYS)
+
+
+@router.get("/shop/account/settings", response_class=HTMLResponse)
+async def account_settings(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+    return await render(request, "account_settings.html", error=None, success=False)
+
+
+@router.post("/shop/account/settings", response_class=HTMLResponse)
+async def account_settings_submit(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    new_password_confirm: str = Form(...),
+):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    if not verify_password(current_password, account.password_hash):
+        return await render(request, "account_settings.html", error="settings_password_wrong_current", success=False)
+    if new_password != new_password_confirm:
+        return await render(request, "account_settings.html", error="settings_password_mismatch", success=False)
+    if len(new_password) < 8:
+        return await render(request, "account_settings.html", error="password_too_short", success=False)
+
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        db_account.password_hash = hash_password(new_password)
+        await session.commit()
+
+    return await render(request, "account_settings.html", error=None, success=True)

@@ -16,9 +16,11 @@
       <div class="nav-links">
         <a href="/shop/catalog">{{ t("nav_catalog") }}</a>
         <a href="/shop/services">{{ t("nav_services") }}</a>
+        <a href="#" id="support-nav-link">{{ t("nav_support") }}</a>
         {% if account %}
           <a href="/shop/account/orders">{{ t("nav_my_orders") }}</a>
           <a href="/shop/account/chats">{{ t("nav_my_chats") }}</a>
+          <a href="/shop/account/settings">{{ t("nav_settings") }}</a>
           <a href="/shop/logout">{{ t("nav_logout") }}</a>
         {% else %}
           <a href="/shop/login">{{ t("nav_login") }}</a>
@@ -37,6 +39,14 @@
   </div>
 
   {% block body %}{% endblock %}
+
+  <form id="start-support-form" method="post" action="/shop/chat/start" hidden></form>
+  <script>
+    document.getElementById("support-nav-link").addEventListener("click", function (e) {
+      e.preventDefault();
+      document.getElementById("start-support-form").submit();
+    });
+  </script>
 
   <div class="footer">
     <div class="container">

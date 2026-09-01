@@ -117,14 +117,22 @@ async def _handle_order_status(session, content: dict) -> None:
     await session.commit()
 
     await session.refresh(order, attribute_names=["user"])
-    if order.iccid:
-        await _notify_bot.send_message(
-            chat_id=order.user.telegram_id,
-            text=(
-                f"✅ Твой eSIM готов! Открой «Мои eSIM» в приложении, там появился QR-код "
-                f"для активации (заказ №{order.id})."
-            ),
-        )
+    if order.iccid and order.user is not None and order.user.telegram_id:
+        # order.user бывает None для заказов с сайта (там нет Telegram-личности вообще —
+        # см. app/webapp/shop.py, там user_id у заказа осознанно оставляют пустым) —
+        # именно на таких заказах раньше падало с AttributeError. Уведомление в Telegram
+        # тут просто нечем/некому отправить — сам QR всё равно уже виден на странице
+        # заказа сайта, ничего не теряем, просто пропускаем этот шаг.
+        try:
+            await _notify_bot.send_message(
+                chat_id=order.user.telegram_id,
+                text=(
+                    f"✅ Твой eSIM готов! Открой «Мои eSIM» в приложении, там появился QR-код "
+                    f"для активации (заказ №{order.id})."
+                ),
+            )
+        except Exception:
+            pass  # сбой отправки уведомления не должен ронять обработку вебхука
 
 
 async def _handle_esim_status(session, content: dict) -> None:
@@ -141,13 +149,18 @@ async def _handle_data_usage(session, content: dict) -> None:
     if order is None:
         return
     await session.refresh(order, attribute_names=["user"])
+    if order.user is None or not order.user.telegram_id:
+        return  # заказ с сайта — уведомлять в Telegram некого, это нормально
     threshold_pct = int(float(content.get("remainThreshold", 0)) * 100)
     remain_mb = round(content.get("remain", 0) / 1048576)
-    await _notify_bot.send_message(
-        chat_id=order.user.telegram_id,
-        text=f"📶 Осталось {threshold_pct}% трафика по твоему eSIM (≈{remain_mb} МБ). "
-             f"Можно оформить докупку в разделе «Мои eSIM».",
-    )
+    try:
+        await _notify_bot.send_message(
+            chat_id=order.user.telegram_id,
+            text=f"📶 Осталось {threshold_pct}% трафика по твоему eSIM (≈{remain_mb} МБ). "
+                 f"Можно оформить докупку в разделе «Мои eSIM».",
+        )
+    except Exception:
+        pass
 
 
 async def _handle_validity_usage(session, content: dict) -> None:
@@ -155,11 +168,16 @@ async def _handle_validity_usage(session, content: dict) -> None:
     if order is None:
         return
     await session.refresh(order, attribute_names=["user"])
-    await _notify_bot.send_message(
-        chat_id=order.user.telegram_id,
-        text=f"⏳ Срок действия твоего eSIM истекает через {content.get('remain', '?')} дн. "
-             f"После истечения докупить данные будет нельзя — оформи новый пакет заранее.",
-    )
+    if order.user is None or not order.user.telegram_id:
+        return  # заказ с сайта — уведомлять в Telegram некого, это нормально
+    try:
+        await _notify_bot.send_message(
+            chat_id=order.user.telegram_id,
+            text=f"⏳ Срок действия твоего eSIM истекает через {content.get('remain', '?')} дн. "
+                 f"После истечения докупить данные будет нельзя — оформи новый пакет заранее.",
+        )
+    except Exception:
+        pass
 
 
 async def _find_order_by_esim_tran_no(session, esim_tran_no: str) -> Order | None:

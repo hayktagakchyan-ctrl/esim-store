@@ -311,7 +311,10 @@ a { color: inherit; text-decoration: none; }
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
+  text-decoration: none;
+  color: var(--text-secondary);
 }
+.promo-pill.active { background: var(--accent-gradient); color: #fff; }
 
 /* --- Feature grid --- */
 .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }

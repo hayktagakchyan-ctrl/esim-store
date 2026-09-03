@@ -8,6 +8,7 @@
     <a href="/packages" class="active">Пакеты</a>
     <a href="/products">Товары</a>
     <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
   </nav>
   <a class="logout" href="/logout">Выйти</a>
 </div>
@@ -50,6 +51,9 @@
       <div class="field">
         <div class="label">Наценка, % (цена клиенту = закупка × (1 + это/100))</div>
         <input type="text" name="markup_percent" value="{{ default_markup }}" required>
+      </div>
+      <div class="field">
+        <label><input type="checkbox" name="is_regional" value="true"> Это региональный пакет (Европа/Азия/... — не одна страна), напр. код EU-42</label>
       </div>
       <button class="btn" type="submit">Импортировать</button>
     </form>

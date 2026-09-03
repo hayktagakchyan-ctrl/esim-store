@@ -319,6 +319,21 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
     "no_reviews_yet": {"ru": "Пока нет отзывов — стань первым.", "hy": "Դեռ կարծիքներ չկան։", "en": "No reviews yet — be the first."},
     "days_short": {"ru": "дн.", "hy": "օր", "en": "days"},
 
+    "notif_title": {"ru": "Уведомления", "hy": "Ծանուցումներ", "en": "Notifications"},
+    "notif_filter_all": {"ru": "Все", "hy": "Բոլորը", "en": "All"},
+    "notif_filter_order": {"ru": "Заказы", "hy": "Պատվերներ", "en": "Orders"},
+    "notif_filter_payment": {"ru": "Платежи", "hy": "Վճարումներ", "en": "Payments"},
+    "notif_filter_system": {"ru": "Система", "hy": "Համակարգ", "en": "System"},
+    "notif_empty": {"ru": "Пока нет уведомлений", "hy": "Դեռ ծանուցումներ չկան", "en": "No notifications yet"},
+
+    "promo_title": {"ru": "Промокод", "hy": "Պրոմոկոդ", "en": "Promo code"},
+    "promo_placeholder": {"ru": "Введи промокод", "hy": "Մուտքագրիր պրոմոկոդը", "en": "Enter promo code"},
+    "promo_redeem_btn": {"ru": "Активировать", "hy": "Ակտիվացնել", "en": "Redeem"},
+    "promo_not_found": {"ru": "Промокод не найден", "hy": "Պրոմոկոդը գոյություն չունի", "en": "Promo code not found"},
+    "promo_expired": {"ru": "Срок действия промокода истёк", "hy": "Պրոմոկոդի ժամկետը լրացել է", "en": "This promo code has expired"},
+    "promo_limit": {"ru": "Лимит активаций промокода исчерпан", "hy": "Ակտիվացումների սահմանաչափը սպառվել է", "en": "This promo code has reached its usage limit"},
+    "promo_used": {"ru": "Ты уже активировал этот промокод", "hy": "Դու արդեն ակտիվացրել ես այս պրոմոկոդը", "en": "You've already redeemed this code"},
+
     "faq_title": {"ru": "Частые вопросы", "hy": "Հաճախակի հարցեր", "en": "FAQ"},
     "faq_q1": {"ru": "Как быстро активируется eSIM?", "hy": "Որքա՞ն արագ է ակտիվանում eSIM-ը", "en": "How fast does the eSIM activate?"},
     "faq_a1": {

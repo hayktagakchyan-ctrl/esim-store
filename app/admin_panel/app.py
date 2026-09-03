@@ -6,6 +6,7 @@
 логин/пароль из .env + сессионная cookie, без ролей и регистрации.
 """
 from pathlib import Path
+from datetime import datetime
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -16,7 +17,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.db import get_session, init_db
-from app.database.models import Category, Order, OrderStatus, Package, Product, User
+from app.database.models import Category, Order, OrderStatus, Package, Product, User, PromoCode
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.payments import _fulfill_order
@@ -282,6 +283,7 @@ async def package_import_submit(
     country_code: str = Form(...),
     country_name: str = Form(...),
     markup_percent: float = Form(...),
+    is_regional: bool = Form(False),
     _=Depends(require_login),
 ):
     country_code = country_code.strip().upper()
@@ -339,6 +341,7 @@ async def package_import_submit(
                 sell_price=sell_price,
                 currency="USD",
                 is_active=True,
+                is_regional=is_regional,
             )
             session.add(package)
             created += 1
@@ -700,3 +703,55 @@ async def product_delete(product_id: int, _=Depends(require_login)):
         await session.commit()
 
     return RedirectResponse(url="/products", status_code=302)
+
+
+# --- Промокоды ---
+
+@app.get("/promo-codes", response_class=HTMLResponse)
+async def promo_codes_list(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        result = await session.execute(select(PromoCode).order_by(PromoCode.created_at.desc()))
+        codes = list(result.scalars())
+    return templates.TemplateResponse("promo_codes_list.html", {"request": request, "codes": codes})
+
+
+@app.post("/promo-codes/new")
+async def promo_code_create(
+    request: Request,
+    code: str = Form(...),
+    bonus_amount: float = Form(...),
+    max_uses: str = Form(""),
+    expires_at: str = Form(""),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        normalized_code = code.strip().upper()
+        existing = (await session.execute(select(PromoCode).where(PromoCode.code == normalized_code))).scalar_one_or_none()
+        if existing is not None:
+            result = await session.execute(select(PromoCode).order_by(PromoCode.created_at.desc()))
+            codes = list(result.scalars())
+            return templates.TemplateResponse(
+                "promo_codes_list.html",
+                {"request": request, "codes": codes, "error": f"Промокод «{normalized_code}» уже существует."},
+            )
+
+        promo = PromoCode(
+            code=normalized_code,
+            bonus_amount=bonus_amount,
+            max_uses=int(max_uses) if max_uses.strip() else None,
+            expires_at=datetime.fromisoformat(expires_at) if expires_at.strip() else None,
+            is_active=True,
+        )
+        session.add(promo)
+        await session.commit()
+    return RedirectResponse(url="/promo-codes", status_code=302)
+
+
+@app.post("/promo-codes/{promo_id}/toggle")
+async def promo_code_toggle(promo_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        promo = await session.get(PromoCode, promo_id)
+        if promo is not None:
+            promo.is_active = not promo.is_active
+            await session.commit()
+    return RedirectResponse(url="/promo-codes", status_code=302)

@@ -10,6 +10,7 @@ uvicorn app.webapp.app:app --port 8001
 from pathlib import Path
 import logging
 import secrets
+from datetime import datetime
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -22,9 +23,13 @@ from app.config import settings
 from app.database.db import get_session, init_db
 
 logging.basicConfig(level=logging.INFO)
-from app.database.models import Package, User, Order, OrderStatus, Favorite, Review, TopUp, PaymentProvider, PaymentStatus
+from app.database.models import (
+    Package, User, Order, OrderStatus, Favorite, Review, TopUp, PaymentProvider, PaymentStatus,
+    Notification, NotificationType, PromoCode, PromoCodeRedemption,
+)
 from app.webapp.auth import get_current_user
 from app.webapp import webhooks, payments, products, conversations, admin_chat, shop
+from app.webapp.payments import notify
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -101,6 +106,32 @@ async def list_countries():
         )
         rows = result.all()
     return [{"code": code, "name": name} for code, name in rows]
+
+
+@app.get("/api/regions")
+async def list_regions():
+    """Для карточек 'Europe Plan'/'Asia Plan' на главном экране — по одному
+    представителю (самый дешёвый активный пакет) на каждый регион."""
+    async with get_session() as session:
+        result = await session.execute(
+            select(Package).where(Package.is_regional.is_(True), Package.is_active.is_(True))
+            .order_by(Package.country_code, Package.sell_price)
+        )
+        packages = list(result.scalars())
+
+    seen_codes = set()
+    regions = []
+    for p in packages:
+        if p.country_code in seen_codes:
+            continue
+        seen_codes.add(p.country_code)
+        regions.append({
+            "code": p.country_code,
+            "name": p.country_name,
+            "from_price": float(p.sell_price),
+            "currency": p.currency,
+        })
+    return regions
 
 
 @app.get("/api/packages")
@@ -286,3 +317,82 @@ app.mount("/shop-static", StaticFiles(directory=BASE_DIR / "shop_static"), name=
 # Статика клиентского магазина (index.html/app.js/style.css) — подключается ПОСЛЕДНЕЙ,
 # чтобы не перехватывать запросы к /api/* и /support-chat/*.
 app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")
+
+
+# --- Уведомления ---
+
+@app.get("/api/notifications")
+async def list_notifications(type: str = "all", user: User = Depends(get_current_user)):
+    async with get_session() as session:
+        query = select(Notification).where(Notification.user_id == user.id)
+        if type != "all":
+            query = query.where(Notification.type == NotificationType(type))
+        result = await session.execute(query.order_by(Notification.created_at.desc()).limit(50))
+        items = list(result.scalars())
+
+        counts = {}
+        for t in NotificationType:
+            counts[t.value] = len([n for n in (
+                await session.execute(select(Notification).where(Notification.user_id == user.id, Notification.type == t))
+            ).scalars()])
+
+    return {
+        "items": [
+            {"id": n.id, "type": n.type.value, "title": n.title, "body": n.body, "is_read": n.is_read,
+             "created_at": n.created_at.isoformat()}
+            for n in items
+        ],
+        "counts": counts,
+    }
+
+
+@app.post("/api/notifications/{notification_id}/read")
+async def mark_notification_read(notification_id: int, user: User = Depends(get_current_user)):
+    async with get_session() as session:
+        notif = await session.get(Notification, notification_id)
+        if notif is None or notif.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Уведомление не найдено")
+        notif.is_read = True
+        await session.commit()
+    return {"ok": True}
+
+
+# --- Промокоды ---
+
+class PromoRedeemRequest(BaseModel):
+    code: str
+
+
+@app.post("/api/promo/redeem")
+async def redeem_promo(body: PromoRedeemRequest, user: User = Depends(get_current_user)):
+    code = body.code.strip().upper()
+    async with get_session() as session:
+        promo = (await session.execute(select(PromoCode).where(PromoCode.code == code))).scalar_one_or_none()
+        if promo is None or not promo.is_active:
+            raise HTTPException(status_code=404, detail="Промокод не найден")
+        if promo.expires_at and promo.expires_at < datetime.utcnow():
+            raise HTTPException(status_code=400, detail="Срок действия промокода истёк")
+        if promo.max_uses is not None and promo.used_count >= promo.max_uses:
+            raise HTTPException(status_code=400, detail="Промокод больше не действует — лимит активаций исчерпан")
+
+        already = (
+            await session.execute(
+                select(PromoCodeRedemption).where(PromoCodeRedemption.promo_code_id == promo.id, PromoCodeRedemption.user_id == user.id)
+            )
+        ).scalar_one_or_none()
+        if already is not None:
+            raise HTTPException(status_code=400, detail="Ты уже активировал этот промокод")
+
+        db_user = await session.get(User, user.id)
+        db_user.balance = round(db_user.balance + promo.bonus_amount, 2)
+        promo.used_count += 1
+        session.add(PromoCodeRedemption(promo_code_id=promo.id, user_id=user.id))
+        await session.commit()
+
+        await notify(
+            session, user_id=user.id, type=NotificationType.PAYMENT,
+            title="Промокод активирован",
+            body=f"На баланс зачислено ${promo.bonus_amount:.2f} по промокоду {code}.",
+        )
+
+    return {"bonus_amount": promo.bonus_amount}

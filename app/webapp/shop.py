@@ -27,12 +27,13 @@ from app.database.db import get_session
 from app.database.models import (
     Category, Conversation, ConversationMessage, ConversationStatus, Favorite, Order, OrderStatus,
     Package, Payment, PaymentProvider, PaymentStatus, Product, Review, TopUp, WebsiteAccount,
+    Notification, NotificationType, PromoCode, PromoCodeRedemption,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.payments import idram
 from app.services.payments.oxapay import oxapay_client, OxaPayError
 from app.webapp.notify_bots import support_notify_bot
-from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT
+from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT, notify
 from app.webapp.shop_auth import get_current_account, hash_password, verify_password
 from app.webapp.shop_email import send_email
 from app.webapp.shop_i18n import get_lang, t as translate
@@ -987,3 +988,91 @@ async def api_favorites(request: Request):
             await session.execute(select(Favorite.country_code).where(Favorite.website_account_id == account.id))
         ).scalars())
     return {"codes": favs}
+
+
+# --- Уведомления ---
+
+@router.get("/shop/account/notifications", response_class=HTMLResponse)
+async def account_notifications(request: Request, type: str = "all"):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        query = select(Notification).where(Notification.website_account_id == account.id)
+        if type != "all":
+            query = query.where(Notification.type == NotificationType(type))
+        result = await session.execute(query.order_by(Notification.created_at.desc()).limit(50))
+        items = list(result.scalars())
+
+        all_items = list((
+            await session.execute(select(Notification).where(Notification.website_account_id == account.id))
+        ).scalars())
+        unread_ids = [n.id for n in items if not n.is_read]
+        for nid in unread_ids:
+            db_notif = await session.get(Notification, nid)
+            db_notif.is_read = True
+        if unread_ids:
+            await session.commit()
+
+    counts = {t.value: len([n for n in all_items if n.type == t]) for t in NotificationType}
+    return await render(request, "notifications.html", items=items, counts=counts, current_type=type)
+
+
+# --- Промокоды ---
+
+@router.post("/shop/promo/redeem", response_class=HTMLResponse)
+async def redeem_promo(request: Request, code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    code = code.strip().upper()
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        promo = (await session.execute(select(PromoCode).where(PromoCode.code == code))).scalar_one_or_none()
+
+        error = None
+        bonus_amount = None
+        if promo is None or not promo.is_active:
+            error = "promo_not_found"
+        elif promo.expires_at and promo.expires_at < datetime.utcnow():
+            error = "promo_expired"
+        elif promo.max_uses is not None and promo.used_count >= promo.max_uses:
+            error = "promo_limit"
+        else:
+            already = (
+                await session.execute(
+                    select(PromoCodeRedemption).where(
+                        PromoCodeRedemption.promo_code_id == promo.id,
+                        PromoCodeRedemption.website_account_id == account.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                error = "promo_used"
+            else:
+                db_account.balance = round(db_account.balance + promo.bonus_amount, 2)
+                promo.used_count += 1
+                session.add(PromoCodeRedemption(promo_code_id=promo.id, website_account_id=account.id))
+                await session.commit()
+                bonus_amount = promo.bonus_amount
+                await notify(
+                    session, website_account_id=account.id, type=NotificationType.PAYMENT,
+                    title="Промокод активирован",
+                    body=f"На баланс зачислено ${promo.bonus_amount:.2f} по промокоду {code}.",
+                )
+
+        top_ups = list((
+            await session.execute(
+                select(TopUp).where(TopUp.website_account_id == account.id).order_by(TopUp.created_at.desc()).limit(20)
+            )
+        ).scalars())
+        balance_now = db_account.balance
+
+    return await render(
+        request, "account_balance.html",
+        balance=balance_now, top_ups=top_ups, referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={db_account.referral_code}",
+        referral_percent=REFERRAL_BONUS_PERCENT, error=None,
+        promo_error=error, promo_success=bonus_amount,
+    )

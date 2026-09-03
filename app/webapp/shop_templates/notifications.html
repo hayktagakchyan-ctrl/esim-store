@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ t("notif_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("notif_title") }}</h2>
+
+    <div class="promo-strip" style="margin-bottom:16px;">
+      <a class="promo-pill {{ 'active' if current_type == 'all' }}" href="/shop/account/notifications?type=all">{{ t("notif_filter_all") }} ({{ counts.get("order", 0) + counts.get("payment", 0) + counts.get("system", 0) }})</a>
+      <a class="promo-pill {{ 'active' if current_type == 'order' }}" href="/shop/account/notifications?type=order">{{ t("notif_filter_order") }} ({{ counts.get("order", 0) }})</a>
+      <a class="promo-pill {{ 'active' if current_type == 'payment' }}" href="/shop/account/notifications?type=payment">{{ t("notif_filter_payment") }} ({{ counts.get("payment", 0) }})</a>
+      <a class="promo-pill {{ 'active' if current_type == 'system' }}" href="/shop/account/notifications?type=system">{{ t("notif_filter_system") }} ({{ counts.get("system", 0) }})</a>
+    </div>
+
+    {% for n in items %}
+    <div class="card">
+      <strong>{{ n.title }}</strong>
+      <p class="hint" style="margin:4px 0 0;">{{ n.body }}</p>
+    </div>
+    {% else %}
+    <p class="hint" style="text-align:center;">{{ t("notif_empty") }}</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

@@ -46,7 +46,7 @@ class Package(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     esimaccess_package_code: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    country_code: Mapped[str] = mapped_column(String(8), index=True)   # ISO-код страны, напр. "AM"
+    country_code: Mapped[str] = mapped_column(String(8), index=True)   # ISO-код страны, напр. "AM" — для региональных пакетов сюда пишется код региона (напр. "EU-42")
     country_name: Mapped[str] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(255))                    # напр. "5 ГБ / 30 дней"
     data_amount_mb: Mapped[int] = mapped_column(Integer)
@@ -55,6 +55,7 @@ class Package(Base):
     sell_price: Mapped[float] = mapped_column(Numeric(10, 2))          # цена для клиента (с наценкой)
     currency: Mapped[str] = mapped_column(String(8), default="USD")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)     # можно скрыть пакет из каталога
+    is_regional: Mapped[bool] = mapped_column(Boolean, default=False)  # пакет на регион (Европа/Азия/...), не на одну страну
     raw_data: Mapped[dict | None] = mapped_column(JSON, nullable=True) # сырой ответ API — на всякий случай
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -396,4 +397,54 @@ class Favorite(Base):
     website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     country_code: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PromoCode(Base):
+    """Промокод — начисляет фиксированную сумму на баланс при активации. Заводится вручную в админке."""
+    __tablename__ = "promo_codes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True, index=True)
+    bonus_amount: Mapped[float] = mapped_column()          # сколько $ начисляется на баланс
+    max_uses: Mapped[int | None] = mapped_column(Integer, nullable=True)  # None = без ограничения
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class PromoCodeRedemption(Base):
+    """Кто когда активировал какой промокод — не даёт активировать один и тот же код дважды."""
+    __tablename__ = "promo_code_redemptions"
+    __table_args__ = (
+        UniqueConstraint("promo_code_id", "website_account_id", name="uq_promo_account"),
+        UniqueConstraint("promo_code_id", "user_id", name="uq_promo_user"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    promo_code_id: Mapped[int] = mapped_column(ForeignKey("promo_codes.id"), index=True)
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    redeemed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class NotificationType(str, enum.Enum):
+    ORDER = "order"
+    PAYMENT = "payment"
+    SYSTEM = "system"
+
+
+class Notification(Base):
+    """Уведомление в приложении — не имеет отношения к push-сообщениям бота (те шлются отдельно,
+    прямо в чат Telegram); это именно лента внутри Mini App/сайта, как история событий."""
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType))
+    title: Mapped[str] = mapped_column(String(255))
+    body: Mapped[str] = mapped_column(Text)
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

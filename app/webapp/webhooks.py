@@ -20,10 +20,10 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import settings
 from app.database.db import get_session
-from app.database.models import Order, OrderStatus, WebhookEvent
+from app.database.models import Order, OrderStatus, WebhookEvent, NotificationType
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.notify_bots import client_notify_bot as _notify_bot
-from app.webapp.payments import maybe_credit_referral_bonus
+from app.webapp.payments import maybe_credit_referral_bonus, notify
 
 router = APIRouter()
 
@@ -118,6 +118,11 @@ async def _handle_order_status(session, content: dict) -> None:
     await session.commit()
 
     await maybe_credit_referral_bonus(session, order)
+    await notify(
+        session, website_account_id=order.website_account_id, user_id=order.user_id,
+        type=NotificationType.ORDER, title="eSIM активирован",
+        body=f"Заказ №{order.id} готов — QR-код и данные для активации доступны в «Мои eSIM».",
+    )
 
     await session.refresh(order, attribute_names=["user"])
     if order.iccid and order.user is not None and order.user.telegram_id:

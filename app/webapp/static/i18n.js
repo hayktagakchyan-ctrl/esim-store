@@ -53,6 +53,39 @@ const I18N = {
   review_placeholder: { ru: "Как всё прошло? (необязательно)", hy: "Ինչպե՞ս անցավ", en: "How did it go? (optional)" },
   review_submit: { ru: "Отправить отзыв", hy: "Ուղարկել կարծիքը", en: "Submit review" },
   review_thanks: { ru: "Спасибо за отзыв!", hy: "Շնորհակալություն!", en: "Thanks for your review!" },
+
+  tab_home: { ru: "Главная", hy: "Գլխավոր", en: "Home" },
+  tab_browse: { ru: "Обзор", hy: "Դիտարկել", en: "Browse" },
+  tab_profile: { ru: "Профиль", hy: "Պրոֆիլ", en: "Profile" },
+
+  quick_buy_esim: { ru: "Купить eSIM", hy: "Գնել eSIM", en: "Buy eSIM" },
+  quick_my_esims: { ru: "Мои eSIM", hy: "Իմ eSIM-երը", en: "My eSIMs" },
+  quick_favorites: { ru: "Избранное", hy: "Ընտրյալներ", en: "Favorites" },
+  quick_topup: { ru: "Пополнить", hy: "Համալրել", en: "Top up" },
+
+  home_regions_title: { ru: "Региональные пакеты", hy: "Տարածաշրջանային փաթեթներ", en: "Regional plans" },
+  region_from: { ru: "от", hy: "-ից", en: "from" },
+
+  home_why_title: { ru: "Почему KaLine?", hy: "Ինչու՞ KaLine", en: "Why KaLine?" },
+  why_instant: { ru: "Мгновенная активация", hy: "Ակնթարթային ակտիվացում", en: "Instant activation" },
+  why_secure: { ru: "Надёжно и безопасно", hy: "Հուսալի և անվտանգ", en: "Reliable and secure" },
+  why_no_roaming: { ru: "Без роуминга", hy: "Առանց ռոումինգի", en: "No roaming fees" },
+  why_support: { ru: "Поддержка 24/7", hy: "Աջակցություն 24/7", en: "24/7 support" },
+
+  profile_help: { ru: "Помощь и поддержка", hy: "Օգնություն և աջակցություն", en: "Help & support" },
+  profile_language: { ru: "Язык", hy: "Լեզու", en: "Language" },
+
+  notif_title: { ru: "Уведомления", hy: "Ծանուցումներ", en: "Notifications" },
+  notif_filter_all: { ru: "Все", hy: "Բոլորը", en: "All" },
+  notif_filter_order: { ru: "Заказы", hy: "Պատվերներ", en: "Orders" },
+  notif_filter_payment: { ru: "Платежи", hy: "Վճարումներ", en: "Payments" },
+  notif_filter_system: { ru: "Система", hy: "Համակարգ", en: "System" },
+  notif_empty: { ru: "Пока нет уведомлений", hy: "Դեռ ծանուցումներ չկան", en: "No notifications yet" },
+
+  promo_title: { ru: "Промокод", hy: "Պրոմոկոդ", en: "Promo code" },
+  promo_placeholder: { ru: "Введи промокод", hy: "Մուտքագրիր պրոմոկոդը", en: "Enter promo code" },
+  promo_redeem_btn: { ru: "Активировать", hy: "Ակտիվացնել", en: "Redeem" },
+  promo_error: { ru: "Промокод не найден или уже использован", hy: "Պրոմոկոդը գոյություն չունի կամ արդեն օգտագործված է", en: "Promo code not found or already used" },
   qr_manual_hint: { ru: "Не сканируется? Введи вручную в настройках телефона:", hy: "Չի սկանավորվում: Մուտքագրիր ձեռքով հեռախոսի կարգավորումներում.", en: "Can't scan? Enter this manually in your phone settings:" },
   status_pending_payment: { ru: "Ждёт оплаты", hy: "Սպասում է վճարման", en: "Awaiting payment" },
   status_paid: { ru: "Оплачен", hy: "Վճարված է", en: "Paid" },

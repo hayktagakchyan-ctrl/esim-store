@@ -65,9 +65,9 @@ function escapeHtml(text) {
 // --- Навигация между экранами ---
 const screens = [
   "home", "esim-countries", "esim-packages", "esim-checkout",
-  "products", "my-esims", "balance", "chats", "chat",
+  "products", "my-esims", "balance", "profile", "notifications", "chats", "chat",
 ];
-const TAB_ROOTS = { home: "catalog", "my-esims": "my-esims", chats: "chats" };
+const TAB_ROOTS = { home: "home", "esim-countries": "browse", "my-esims": "my-esims", profile: "profile" };
 
 let selectedCountry = null;
 let selectedPackage = null;
@@ -94,20 +94,22 @@ function showScreen(name) {
 
   const titles = {
     home: "eSIM Store",
-    "esim-countries": t("home_esim_title"),
+    "esim-countries": t("tab_browse"),
     "esim-packages": selectedCountry ? selectedCountry.name : "",
     "esim-checkout": t("checkout_title"),
     products: currentCategory ? currentCategory.title : "",
     "my-esims": t("tab_my_esims"),
     balance: t("nav_balance"),
+    profile: t("tab_profile"),
+    notifications: t("notif_title"),
     chats: t("tab_chats"),
     chat: "",
   };
   document.getElementById("header-title").textContent = titles[name] || "eSIM Store";
 
   const activeTab = isTabRoot ? TAB_ROOTS[name] :
-    ["esim-countries", "esim-packages", "esim-checkout", "products"].includes(name) ? "catalog" :
-    name === "chat" ? "chats" : null;
+    ["esim-packages", "esim-checkout", "products"].includes(name) ? "browse" :
+    ["balance", "notifications", "chats", "chat"].includes(name) ? "profile" : null;
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === activeTab);
   });
@@ -116,9 +118,10 @@ function showScreen(name) {
 document.getElementById("back-btn").addEventListener("click", () => {
   if (!document.getElementById("screen-esim-checkout").hidden) return showScreen("esim-packages");
   if (!document.getElementById("screen-esim-packages").hidden) return showScreen("esim-countries");
-  if (!document.getElementById("screen-esim-countries").hidden) return showScreen("home");
   if (!document.getElementById("screen-products").hidden) return showScreen("home");
-  if (!document.getElementById("screen-balance").hidden) return showScreen("my-esims");
+  if (!document.getElementById("screen-balance").hidden) return showScreen("profile");
+  if (!document.getElementById("screen-notifications").hidden) return showScreen("profile");
+  if (!document.getElementById("screen-chats").hidden) return showScreen("profile");
   if (!document.getElementById("screen-chat").hidden) return showScreen(chatReturnScreen === "products" ? "products" : "chats");
   showScreen("home");
 });
@@ -126,11 +129,28 @@ document.getElementById("back-btn").addEventListener("click", () => {
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
-    if (tab === "catalog") { loadHomeCategories(); showScreen("home"); }
+    if (tab === "home") { loadHomeCategories(); loadRegionBundles(); showScreen("home"); }
+    if (tab === "browse") { loadCountries(); showScreen("esim-countries"); }
     if (tab === "my-esims") { loadMyEsims(); showScreen("my-esims"); }
-    if (tab === "chats") { loadChatsList(); showScreen("chats"); }
+    if (tab === "profile") { loadProfile(); showScreen("profile"); }
   });
 });
+
+document.getElementById("floating-chat-btn").addEventListener("click", () => {
+  chatReturnScreen = "chats";
+  loadChatsList();
+  showScreen("chats");
+});
+
+document.getElementById("quick-buy-esim").addEventListener("click", () => { loadCountries(); showScreen("esim-countries"); });
+document.getElementById("quick-my-esims").addEventListener("click", () => { loadMyEsims(); showScreen("my-esims"); });
+document.getElementById("quick-favorites").addEventListener("click", () => {
+  loadCountries().then(() => {
+    showScreen("esim-countries");
+    document.getElementById("filter-favorites-btn").click();
+  });
+});
+document.getElementById("quick-topup").addEventListener("click", () => { loadBalance(); showScreen("balance"); });
 
 document.querySelectorAll(".lang-btn").forEach((btn) => {
   btn.addEventListener("click", () => setLang(btn.dataset.lang));
@@ -150,6 +170,28 @@ document.getElementById("category-esim").addEventListener("click", () => {
   loadCountries();
   showScreen("esim-countries");
 });
+
+async function loadRegionBundles() {
+  const regions = await api("/api/regions");
+  const list = document.getElementById("region-list");
+  list.innerHTML = "";
+  for (const r of regions) {
+    const row = document.createElement("div");
+    row.className = "plan-card";
+    row.innerHTML = `
+      <div class="plan-main">
+        <div class="plan-icon">🌐</div>
+        <div>
+          <div class="plan-title">${escapeHtml(r.name)}</div>
+          <div class="hint">${t("region_from")} $${r.from_price.toFixed(2)}</div>
+        </div>
+      </div>
+      <span class="chevron">›</span>
+    `;
+    row.addEventListener("click", () => openCountry({ code: r.code, name: r.name }));
+    list.appendChild(row);
+  }
+}
 
 async function loadHomeCategories() {
   const categories = await api(`/api/categories?lang=${currentLang}`);
@@ -414,6 +456,103 @@ async function submitTopup(method) {
   }
 }
 
+document.getElementById("notif-bell-btn").addEventListener("click", () => {
+  loadNotifications("all");
+  showScreen("notifications");
+});
+
+async function refreshNotifBadge() {
+  try {
+    const data = await api("/api/notifications");
+    const unread = data.items.filter((n) => !n.is_read).length;
+    const badge = document.getElementById("notif-badge");
+    badge.textContent = unread > 9 ? "9+" : String(unread);
+    badge.hidden = unread === 0;
+  } catch (e) {
+    // тихо игнорируем — бейдж не критичен
+  }
+}
+
+async function loadNotifications(type) {
+  document.querySelectorAll(".notif-filter-btn").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.type === type);
+  });
+  const data = await api(`/api/notifications?type=${type}`);
+  const list = document.getElementById("notifications-list");
+  list.innerHTML = "";
+  if (data.items.length === 0) {
+    list.innerHTML = `<div class="empty">${t("notif_empty")}</div>`;
+    return;
+  }
+  for (const n of data.items) {
+    const row = document.createElement("div");
+    row.className = "card";
+    if (!n.is_read) row.style.borderLeft = "3px solid var(--accent)";
+    row.innerHTML = `<strong>${escapeHtml(n.title)}</strong><p class="hint" style="margin:4px 0 0;">${escapeHtml(n.body)}</p>`;
+    row.addEventListener("click", () => {
+      if (!n.is_read) {
+        api(`/api/notifications/${n.id}/read`, { method: "POST" }).then(refreshNotifBadge);
+        row.style.borderLeft = "none";
+      }
+    });
+    list.appendChild(row);
+  }
+  refreshNotifBadge();
+}
+
+document.querySelectorAll(".notif-filter-btn").forEach((btn) => {
+  btn.addEventListener("click", () => loadNotifications(btn.dataset.type));
+});
+
+document.getElementById("promo-redeem-btn").addEventListener("click", async () => {
+  const input = document.getElementById("promo-code-input");
+  const code = input.value.trim();
+  if (!code) return;
+  try {
+    const result = await api("/api/promo/redeem", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+    tg.showAlert(`+ $${result.bonus_amount.toFixed(2)}`);
+    input.value = "";
+    loadProfile();
+  } catch (e) {
+    tg.showAlert(t("promo_error"));
+  }
+});
+
+async function loadProfile() {
+  const tgUser = (tg.initDataUnsafe && tg.initDataUnsafe.user) || {};
+  const name = tgUser.first_name || "";
+  document.getElementById("profile-name").textContent = name || t("tab_profile");
+  document.getElementById("profile-avatar").textContent = name ? name[0].toUpperCase() : "?";
+  document.getElementById("profile-lang-value").textContent = currentLang.toUpperCase();
+
+  try {
+    const data = await api("/api/balance");
+    document.getElementById("profile-balance-value").textContent = `$${data.balance.toFixed(2)}`;
+    document.getElementById("profile-referral-desc").textContent = t("referral_desc").replace("{percent}", data.referral_percent);
+    document.getElementById("profile-referral-link").value = `https://t.me/${botUsername}?start=${data.referral_code}`;
+  } catch (e) {
+    // не критично — просто не покажем эти значения
+  }
+}
+
+document.getElementById("profile-balance-row").addEventListener("click", () => { loadBalance(); showScreen("balance"); });
+document.getElementById("profile-referral-row").addEventListener("click", () => {
+  document.getElementById("profile-referral-link").scrollIntoView({ behavior: "smooth" });
+});
+document.getElementById("profile-favorites-row").addEventListener("click", () => {
+  loadCountries().then(() => {
+    showScreen("esim-countries");
+    document.getElementById("filter-favorites-btn").click();
+  });
+});
+document.getElementById("profile-help-row").addEventListener("click", () => {
+  chatReturnScreen = "chats";
+  loadChatsList();
+  showScreen("chats");
+});
 document.getElementById("topup-idram-btn").addEventListener("click", () => submitTopup("idram"));
 document.getElementById("topup-oxapay-btn").addEventListener("click", () => submitTopup("oxapay"));
 document.getElementById("pay-balance-btn").addEventListener("click", () => payWith("balance"));
@@ -663,6 +802,8 @@ document.getElementById("chat-file-input").addEventListener("change", async (e) 
 // --- Старт ---
 setLang(currentLang);
 loadHomeCategories();
+loadRegionBundles();
+refreshNotifBadge();
 showScreen("home");
 
 api("/api/test-payment-enabled")

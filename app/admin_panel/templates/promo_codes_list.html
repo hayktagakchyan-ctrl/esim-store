@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Промокоды — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes" class="active">Промокоды</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Промокоды</h2>
+
+  {% if error %}
+  <div class="card" style="border-color: var(--accent-red, #e74c3c);"><strong>Ошибка:</strong> {{ error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" action="/promo-codes/new">
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Код (например WELCOME10)</div>
+          <input type="text" name="code" required>
+        </div>
+        <div class="field">
+          <div class="label">Бонус на баланс, $</div>
+          <input type="text" name="bonus_amount" required>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Лимит активаций (пусто = без лимита)</div>
+          <input type="text" name="max_uses">
+        </div>
+        <div class="field">
+          <div class="label">Действует до (пусто = бессрочно), напр. 2026-12-31</div>
+          <input type="text" name="expires_at">
+        </div>
+      </div>
+      <button class="btn" type="submit">Создать промокод</button>
+    </form>
+  </div>
+
+  {% for c in codes %}
+  <div class="row">
+    <div>
+      <strong>{{ c.code }}</strong> — бонус ${{ "%.2f"|format(c.bonus_amount) }}
+      <div class="status-label">
+        Активаций: {{ c.used_count }}{% if c.max_uses %} / {{ c.max_uses }}{% endif %}
+        {% if c.expires_at %} · до {{ c.expires_at.strftime("%Y-%m-%d") }}{% endif %}
+        · {{ "включён" if c.is_active else "выключен" }}
+      </div>
+    </div>
+    <form method="post" action="/promo-codes/{{ c.id }}/toggle">
+      <button class="btn secondary" type="submit">{{ "Выключить" if c.is_active else "Включить" }}</button>
+    </form>
+  </div>
+  {% else %}
+  <p class="status-label">Пока нет промокодов.</p>
+  {% endfor %}
+</div>
+{% endblock %}

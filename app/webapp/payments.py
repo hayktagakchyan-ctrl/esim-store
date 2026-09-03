@@ -26,6 +26,7 @@ from app.config import settings
 from app.database.db import get_session
 from app.database.models import (
     Order, OrderStatus, Payment, PaymentProvider, PaymentStatus, User, TopUp, WebsiteAccount,
+    Notification, NotificationType,
 )
 from app.services.esimaccess import esimaccess_client
 from app.services.payments import idram
@@ -99,6 +100,16 @@ async def _fulfill_order(session, order: Order) -> None:
     await session.commit()
 
 
+async def notify(session, *, website_account_id=None, user_id=None, type: NotificationType, title: str, body: str) -> None:
+    """Кладёт запись в ленту уведомлений внутри приложения (не путать с сообщением
+    от бота в Telegram — это отдельная, более "тихая" история событий)."""
+    session.add(Notification(
+        website_account_id=website_account_id, user_id=user_id,
+        type=type, title=title, body=body,
+    ))
+    await session.commit()
+
+
 async def _credit_topup(session, top_up: TopUp) -> None:
     """Подтверждённое пополнение — зачисляет деньги на баланс. Владелец пополнения —
     либо аккаунт сайта, либо пользователь бота (см. модель TopUp)."""
@@ -112,6 +123,12 @@ async def _credit_topup(session, top_up: TopUp) -> None:
         user = await session.get(User, top_up.user_id)
         user.balance = round(user.balance + top_up.amount, 2)
     await session.commit()
+
+    await notify(
+        session, website_account_id=top_up.website_account_id, user_id=top_up.user_id,
+        type=NotificationType.PAYMENT, title="Баланс пополнен",
+        body=f"На баланс зачислено ${top_up.amount:.2f}.",
+    )
 
 
 REFERRAL_BONUS_PERCENT = 10  # % от суммы первого успешного заказа реферала — зачисляется рефереру на баланс
@@ -143,6 +160,14 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
     referrer.balance = round(referrer.balance + bonus, 2)
     account.referral_bonus_paid = True
     await session.commit()
+
+    ref_website_id = account.referred_by_id if model is WebsiteAccount else None
+    ref_user_id = account.referred_by_id if model is User else None
+    await notify(
+        session, website_account_id=ref_website_id, user_id=ref_user_id,
+        type=NotificationType.PAYMENT, title="Реферальный бонус",
+        body=f"Тебе начислено ${bonus:.2f} — твой друг совершил первую покупку.",
+    )
 
 
 class InitiatePaymentRequest(BaseModel):

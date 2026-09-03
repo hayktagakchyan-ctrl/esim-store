@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>eSIM Store</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/style.css?v=8">
+  <link rel="stylesheet" href="/style.css?v=10">
 </head>
 <body>
   <div id="app">
@@ -19,13 +19,33 @@
         <button class="lang-btn" data-lang="hy">ՀՀ</button>
         <button class="lang-btn" data-lang="en">EN</button>
       </div>
+      <button id="notif-bell-btn" class="icon-btn" aria-label="Notifications">🔔<span id="notif-badge" class="notif-badge" hidden></span></button>
       <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Тема оформления">
         <span class="knob"></span>
       </button>
     </header>
 
-    <!-- Главный экран: eSIM (всегда первая) + категории из админки -->
+    <!-- Главный экран: быстрые действия + категории + регионы + почему мы -->
     <main id="screen-home" class="screen">
+      <div class="quick-actions">
+        <button class="quick-action-btn" id="quick-buy-esim">
+          <span class="quick-action-icon qa-purple">🛍️</span>
+          <span data-i18n="quick_buy_esim"></span>
+        </button>
+        <button class="quick-action-btn" id="quick-my-esims">
+          <span class="quick-action-icon qa-blue">📶</span>
+          <span data-i18n="quick_my_esims"></span>
+        </button>
+        <button class="quick-action-btn" id="quick-favorites">
+          <span class="quick-action-icon qa-orange">♡</span>
+          <span data-i18n="quick_favorites"></span>
+        </button>
+        <button class="quick-action-btn" id="quick-topup">
+          <span class="quick-action-icon qa-green">💳</span>
+          <span data-i18n="quick_topup"></span>
+        </button>
+      </div>
+
       <div class="category-card" id="category-esim">
         <div class="category-emoji">🌍</div>
         <div class="category-text">
@@ -34,6 +54,17 @@
         </div>
       </div>
       <div id="dynamic-categories"></div>
+
+      <h3 class="section-heading" data-i18n="home_regions_title"></h3>
+      <div id="region-list" class="list"></div>
+
+      <div class="why-us-card">
+        <h3 class="section-heading" data-i18n="home_why_title"></h3>
+        <div class="why-row"><span class="why-icon">⚡</span><span data-i18n="why_instant"></span></div>
+        <div class="why-row"><span class="why-icon">🛡️</span><span data-i18n="why_secure"></span></div>
+        <div class="why-row"><span class="why-icon">✈️</span><span data-i18n="why_no_roaming"></span></div>
+        <div class="why-row"><span class="why-icon">💬</span><span data-i18n="why_support"></span></div>
+      </div>
     </main>
 
     <!-- eSIM: страны -->
@@ -70,6 +101,66 @@
     <!-- Лаунж / Туры: список товаров -->
     <main id="screen-products" class="screen" hidden>
       <div id="products-list" class="list"></div>
+    </main>
+
+    <!-- Профиль -->
+    <main id="screen-profile" class="screen" hidden>
+      <div class="profile-header">
+        <div class="profile-avatar" id="profile-avatar">?</div>
+        <div class="profile-name" id="profile-name"></div>
+      </div>
+
+      <div class="list">
+        <button class="row profile-row" id="profile-balance-row">
+          <span class="flag">💳</span>
+          <div class="main"><div class="title" data-i18n="nav_balance"></div></div>
+          <span class="meta" id="profile-balance-value">$0.00</span>
+          <span class="chevron">›</span>
+        </button>
+        <button class="row profile-row" id="profile-referral-row">
+          <span class="flag">🎁</span>
+          <div class="main"><div class="title" data-i18n="referral_title"></div></div>
+          <span class="chevron">›</span>
+        </button>
+        <button class="row profile-row" id="profile-favorites-row">
+          <span class="flag">♡</span>
+          <div class="main"><div class="title" data-i18n="quick_favorites"></div></div>
+          <span class="chevron">›</span>
+        </button>
+        <button class="row profile-row" id="profile-help-row">
+          <span class="flag">🆘</span>
+          <div class="main"><div class="title" data-i18n="profile_help"></div></div>
+          <span class="chevron">›</span>
+        </button>
+        <div class="row profile-row">
+          <span class="flag">🌐</span>
+          <div class="main"><div class="title" data-i18n="profile_language"></div></div>
+          <span class="meta" id="profile-lang-value"></span>
+        </div>
+      </div>
+
+      <div class="referral-promo-card">
+        <div class="hint" data-i18n="referral_title"></div>
+        <p id="profile-referral-desc" class="hint"></p>
+        <input id="profile-referral-link" class="search" type="text" readonly onclick="this.select()">
+      </div>
+
+      <div class="referral-promo-card">
+        <div class="hint" data-i18n="promo_title"></div>
+        <input id="promo-code-input" class="search" type="text" data-i18n-placeholder="promo_placeholder" style="margin: 10px 0;">
+        <button id="promo-redeem-btn" class="btn" data-i18n="promo_redeem_btn"></button>
+      </div>
+    </main>
+
+    <!-- Уведомления -->
+    <main id="screen-notifications" class="screen" hidden>
+      <div class="promo-strip" style="margin-bottom:12px;">
+        <button class="promo-pill notif-filter-btn active" data-type="all" type="button" data-i18n="notif_filter_all"></button>
+        <button class="promo-pill notif-filter-btn" data-type="order" type="button" data-i18n="notif_filter_order"></button>
+        <button class="promo-pill notif-filter-btn" data-type="payment" type="button" data-i18n="notif_filter_payment"></button>
+        <button class="promo-pill notif-filter-btn" data-type="system" type="button" data-i18n="notif_filter_system"></button>
+      </div>
+      <div id="notifications-list" class="list"></div>
     </main>
 
     <!-- Мои eSIM -->
@@ -118,22 +209,26 @@
     </main>
 
     <nav class="tabbar">
-      <button class="tab-btn active" data-tab="catalog">
-        <span class="tab-icon">🌍</span><span data-i18n="tab_catalog"></span>
+      <button class="tab-btn active" data-tab="home">
+        <span class="tab-icon">🏠</span><span data-i18n="tab_home"></span>
+      </button>
+      <button class="tab-btn" data-tab="browse">
+        <span class="tab-icon">🔍</span><span data-i18n="tab_browse"></span>
       </button>
       <button class="tab-btn" data-tab="my-esims">
         <span class="tab-icon">📶</span><span data-i18n="tab_my_esims"></span>
       </button>
-      <button class="tab-btn" data-tab="chats">
-        <span class="tab-icon">💬</span><span data-i18n="tab_chats"></span>
+      <button class="tab-btn" data-tab="profile">
+        <span class="tab-icon">👤</span><span data-i18n="tab_profile"></span>
       </button>
     </nav>
+    <button id="floating-chat-btn" class="floating-chat-btn" aria-label="Support chat">💬</button>
   </div>
 
   <!-- ?v=2 — версия статики. Telegram иногда держит JS/CSS в дисковом кэше даже после
        полного перезапуска приложения; при каждом обновлении app.js/i18n.js/style.css
        увеличивай это число — иначе клиент может продолжать использовать старую версию. -->
-  <script src="/i18n.js?v=5"></script>
-  <script src="/app.js?v=5"></script>
+  <script src="/i18n.js?v=6"></script>
+  <script src="/app.js?v=6"></script>
 </body>
 </html>

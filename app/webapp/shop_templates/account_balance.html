@@ -25,6 +25,16 @@
     </div>
 
     <div class="card">
+      <h3 style="margin-top:0;">{{ t("promo_title") }}</h3>
+      {% if promo_success %}<p class="hint" style="color:#34C759;">+ ${{ "%.2f"|format(promo_success) }}</p>{% endif %}
+      {% if promo_error %}<p class="error">{{ t(promo_error) }}</p>{% endif %}
+      <form method="post" action="/shop/promo/redeem" style="display:flex; gap:8px;">
+        <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
+        <button class="btn" type="submit" style="white-space:nowrap;">{{ t("promo_redeem_btn") }}</button>
+      </form>
+    </div>
+
+    <div class="card">
       <h3 style="margin-top:0;">{{ t("referral_title") }}</h3>
       <p class="hint">{{ t("referral_desc").format(percent=referral_percent) }}</p>
       <input type="text" value="{{ referral_link }}" readonly onclick="this.select()" style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text); font-size:13px;">

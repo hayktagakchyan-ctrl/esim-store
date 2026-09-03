@@ -4,6 +4,7 @@
 """
 from contextlib import asynccontextmanager
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
 from app.config import settings
@@ -30,9 +31,26 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSe
 
 
 async def init_db() -> None:
-    """Создаёт таблицы, если их ещё нет. Для продакшена лучше заменить на Alembic-миграции."""
+    """
+    Создаёт таблицы, если их ещё нет. Для продакшена лучше заменить на Alembic-миграции.
+
+    Три сервиса (webapp/bots/admin) стартуют почти одновременно и каждый вызывает
+    это при старте — без блокировки это иногда приводило к гонке: несколько
+    процессов одновременно пытались создать таблицы в пустой базе, и часть таблиц
+    (например webhook_events) не успевала создаться. advisory lock Postgres не
+    даёт второму и третьему сервису начать создание таблиц, пока первый не закончит.
+    На SQLite (локальная разработка) такого типа блокировки нет — там гонки в
+    принципе не бывает (обычно только один процесс работает с локальным файлом),
+    поэтому просто пропускаем этот шаг.
+    """
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        if engine.dialect.name == "postgresql":
+            await conn.execute(text("SELECT pg_advisory_lock(727272)"))
+        try:
+            await conn.run_sync(Base.metadata.create_all)
+        finally:
+            if engine.dialect.name == "postgresql":
+                await conn.execute(text("SELECT pg_advisory_unlock(727272)"))
 
 
 @asynccontextmanager

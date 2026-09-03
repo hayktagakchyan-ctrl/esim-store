@@ -132,6 +132,9 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
     referrer.balance = round(referrer.balance + bonus, 2)
     account.referral_bonus_paid = True
     await session.commit()
+
+
+class InitiatePaymentRequest(BaseModel):
     method: str  # "idram" | "wallet_pay" | "oxapay"
 
 

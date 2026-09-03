@@ -25,6 +25,15 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Баланс и реферальная программа — то же самое, что у WebsiteAccount (сайт),
+    # только для пользователей бота/Mini App. Отдельные поля, а не общий аккаунт,
+    # потому что у бота и сайта разные способы входа (Telegram vs email) — их
+    # объединение в один аккаунт было бы отдельной, более крупной задачей.
+    balance: Mapped[float] = mapped_column(default=0.0)
+    referral_code: Mapped[str | None] = mapped_column(String(16), unique=True, index=True, nullable=True)
+    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    referral_bonus_paid: Mapped[bool] = mapped_column(default=False)
+
     orders: Mapped[list["Order"]] = relationship(back_populates="user")
 
 
@@ -338,11 +347,13 @@ class WebsiteAccount(Base):
 
 
 class TopUp(Base):
-    """Пополнение баланса — та же логика провайдеров (Idram/OxaPay), что и у Payment для заказов."""
+    """Пополнение баланса — та же логика провайдеров (Idram/OxaPay), что и у Payment для заказов.
+    Владелец — ЛИБО аккаунт сайта, ЛИБО пользователь бота (ровно один из двух)."""
     __tablename__ = "top_ups"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     amount: Mapped[float] = mapped_column()
     currency: Mapped[str] = mapped_column(String(8), default="USD")
     provider: Mapped[PaymentProvider] = mapped_column(Enum(PaymentProvider))
@@ -356,14 +367,15 @@ class TopUp(Base):
 class Review(Base):
     """
     Отзыв на страну — оставить может только тот, у кого есть РЕАЛЬНЫЙ заказ
-    в статусе ACTIVE по этой стране (проверяется в app/webapp/shop.py при
-    создании отзыва) — значит, эти цифры не накручены, растут только от
-    настоящих покупателей.
+    в статусе ACTIVE по этой стране (проверяется при создании отзыва) — значит,
+    эти цифры не накручены, растут только от настоящих покупателей. Владелец —
+    ЛИБО аккаунт сайта, ЛИБО пользователь бота (ровно один из двух).
     """
     __tablename__ = "reviews"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), unique=True)  # один отзыв на один заказ
     country_code: Mapped[str] = mapped_column(String(8), index=True)
     rating: Mapped[int] = mapped_column()  # 1..5
@@ -372,11 +384,16 @@ class Review(Base):
 
 
 class Favorite(Base):
-    """Избранные страны — просто список кодов стран на аккаунт."""
+    """Избранные страны — просто список кодов стран на аккаунт. Владелец —
+    ЛИБО аккаунт сайта, ЛИБО пользователь бота (ровно один из двух)."""
     __tablename__ = "favorites"
-    __table_args__ = (UniqueConstraint("website_account_id", "country_code", name="uq_favorite_account_country"),)
+    __table_args__ = (
+        UniqueConstraint("website_account_id", "country_code", name="uq_favorite_account_country"),
+        UniqueConstraint("user_id", "country_code", name="uq_favorite_user_country"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     country_code: Mapped[str] = mapped_column(String(8))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

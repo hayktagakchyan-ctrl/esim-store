@@ -10,6 +10,7 @@ class Settings(BaseSettings):
 
     # --- Telegram: два независимых бота ---
     CLIENT_BOT_TOKEN: str          # токен основного (клиентского) бота
+    CLIENT_BOT_USERNAME: str = ""  # без @, напр. zergsimbot — нужен для реферальных ссылок t.me/<это>?start=КОД
     SUPPORT_BOT_TOKEN: str         # токен приватного бота поддержки
     SUPPORT_CHAT_ID: int           # твой личный telegram_id — только сюда бот поддержки будет писать/принимать
 

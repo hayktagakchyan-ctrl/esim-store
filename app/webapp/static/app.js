@@ -65,7 +65,7 @@ function escapeHtml(text) {
 // --- Навигация между экранами ---
 const screens = [
   "home", "esim-countries", "esim-packages", "esim-checkout",
-  "products", "my-esims", "chats", "chat",
+  "products", "my-esims", "balance", "chats", "chat",
 ];
 const TAB_ROOTS = { home: "catalog", "my-esims": "my-esims", chats: "chats" };
 
@@ -99,6 +99,7 @@ function showScreen(name) {
     "esim-checkout": t("checkout_title"),
     products: currentCategory ? currentCategory.title : "",
     "my-esims": t("tab_my_esims"),
+    balance: t("nav_balance"),
     chats: t("tab_chats"),
     chat: "",
   };
@@ -117,6 +118,7 @@ document.getElementById("back-btn").addEventListener("click", () => {
   if (!document.getElementById("screen-esim-packages").hidden) return showScreen("esim-countries");
   if (!document.getElementById("screen-esim-countries").hidden) return showScreen("home");
   if (!document.getElementById("screen-products").hidden) return showScreen("home");
+  if (!document.getElementById("screen-balance").hidden) return showScreen("my-esims");
   if (!document.getElementById("screen-chat").hidden) return showScreen(chatReturnScreen === "products" ? "products" : "chats");
   showScreen("home");
 });
@@ -173,8 +175,15 @@ async function loadHomeCategories() {
 }
 
 // --- eSIM: страны ---
+let favoriteCodes = [];
+
 async function loadCountries() {
   const countries = await api("/api/countries");
+  try {
+    favoriteCodes = (await api("/api/favorites")).codes || [];
+  } catch (e) {
+    favoriteCodes = [];
+  }
   const list = document.getElementById("country-list");
   list.innerHTML = "";
   if (countries.length === 0) {
@@ -184,15 +193,45 @@ async function loadCountries() {
   for (const c of countries) {
     const row = document.createElement("div");
     row.className = "row";
+    row.dataset.code = c.code;
+    const isFav = favoriteCodes.includes(c.code);
     row.innerHTML = `
       <span class="flag">${countryCodeToFlag(c.code)}</span>
       <div class="main"><div class="title">${c.name}</div></div>
+      <button class="fav-heart-btn" data-code="${c.code}">${isFav ? "♥" : "♡"}</button>
       <span class="chevron">›</span>
     `;
-    row.addEventListener("click", () => openCountry(c));
+    row.querySelector(".main").addEventListener("click", () => openCountry(c));
+    row.querySelector(".flag").addEventListener("click", () => openCountry(c));
+    row.querySelector(".chevron").addEventListener("click", () => openCountry(c));
+    row.querySelector(".fav-heart-btn").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      const result = await api("/api/favorites/toggle", {
+        method: "POST",
+        body: JSON.stringify({ country_code: c.code }),
+      });
+      e.target.textContent = result.is_favorite ? "♥" : "♡";
+      if (result.is_favorite) favoriteCodes.push(c.code);
+      else favoriteCodes = favoriteCodes.filter((code) => code !== c.code);
+      if (!document.getElementById("filter-favorites-btn").classList.contains("active")) return;
+      if (!result.is_favorite) row.hidden = true;
+    });
     list.appendChild(row);
   }
 }
+
+document.getElementById("filter-all-btn").addEventListener("click", () => {
+  document.getElementById("filter-all-btn").classList.add("active");
+  document.getElementById("filter-favorites-btn").classList.remove("active");
+  document.querySelectorAll("#country-list .row").forEach((row) => { row.hidden = false; });
+});
+document.getElementById("filter-favorites-btn").addEventListener("click", () => {
+  document.getElementById("filter-favorites-btn").classList.add("active");
+  document.getElementById("filter-all-btn").classList.remove("active");
+  document.querySelectorAll("#country-list .row").forEach((row) => {
+    row.hidden = !favoriteCodes.includes(row.dataset.code);
+  });
+});
 
 document.getElementById("search-input").addEventListener("input", (e) => {
   const q = e.target.value.trim().toLowerCase();
@@ -204,11 +243,36 @@ document.getElementById("search-input").addEventListener("input", (e) => {
 
 async function openCountry(country) {
   selectedCountry = country;
-  const packages = await api(`/api/packages?country=${encodeURIComponent(country.code)}`);
+  const data = await api(`/api/packages?country=${encodeURIComponent(country.code)}`);
+  const packages = data.packages;
   const list = document.getElementById("package-list");
   list.innerHTML = "";
+
+  const isFav = favoriteCodes.includes(country.code);
+  const ratingLine = data.review_count
+    ? `★ ${data.avg_rating} · ${data.review_count} ${t("reviews_count")}`
+    : t("no_reviews_yet");
+  const header = document.createElement("div");
+  header.className = "esims-greeting";
+  header.style.paddingBottom = "10px";
+  header.innerHTML = `
+    <div style="font-size:34px;">${countryCodeToFlag(country.code)}</div>
+    <div class="hint" style="margin-top:6px;">${ratingLine}</div>
+    <button id="package-fav-btn" class="btn secondary" style="margin-top:10px;">${isFav ? "♥ " + t("favorite_remove") : "♡ " + t("favorite_add")}</button>
+  `;
+  list.appendChild(header);
+  header.querySelector("#package-fav-btn").addEventListener("click", async (e) => {
+    const result = await api("/api/favorites/toggle", {
+      method: "POST",
+      body: JSON.stringify({ country_code: country.code }),
+    });
+    if (result.is_favorite) favoriteCodes.push(country.code);
+    else favoriteCodes = favoriteCodes.filter((c) => c !== country.code);
+    e.target.textContent = result.is_favorite ? "♥ " + t("favorite_remove") : "♡ " + t("favorite_add");
+  });
+
   if (packages.length === 0) {
-    list.innerHTML = `<div class="empty">${t("packages_empty")}</div>`;
+    list.innerHTML += `<div class="empty">${t("packages_empty")}</div>`;
   } else {
     for (const p of packages) {
       const row = document.createElement("div");
@@ -228,14 +292,15 @@ async function openCountry(country) {
 let testPaymentEnabled = false;
 let walletPayEnabled = true;
 let oxapayEnabled = true;
+let botUsername = "";
 
-function openCheckout(pkg) {
+async function openCheckout(pkg) {
   selectedPackage = pkg;
   const summary = document.getElementById("checkout-summary");
   const gb = pkg.data_amount_mb ? (pkg.data_amount_mb / 1024).toFixed(1) : null;
   summary.innerHTML = `
     <div class="checkout-hero">
-      <div class="checkout-hero-flag">${flagEmoji(selectedCountry.code)}</div>
+      <div class="checkout-hero-flag">${countryCodeToFlag(selectedCountry.code)}</div>
       <div class="checkout-hero-title">${escapeHtml(selectedCountry.name)}</div>
       <div class="checkout-hero-price">${pkg.price} <span>${pkg.currency}</span></div>
     </div>
@@ -249,7 +314,19 @@ function openCheckout(pkg) {
   document.getElementById("pay-walletpay-btn").hidden = !walletPayEnabled;
   document.getElementById("pay-oxapay-btn").hidden = !oxapayEnabled;
   document.getElementById("pay-test-btn").hidden = !testPaymentEnabled;
+
+  const balanceBtn = document.getElementById("pay-balance-btn");
+  balanceBtn.hidden = true;
   showScreen("esim-checkout");
+  try {
+    const balanceData = await api("/api/balance");
+    if (balanceData.balance >= pkg.price) {
+      balanceBtn.textContent = `${t("checkout_pay_balance")} ($${balanceData.balance.toFixed(2)})`;
+      balanceBtn.hidden = false;
+    }
+  } catch (e) {
+    // не критично — просто не покажем кнопку оплаты с баланса
+  }
 }
 
 let paymentPollTimer = null;
@@ -266,7 +343,7 @@ async function payWith(method) {
       method: "POST",
       body: JSON.stringify({ method }),
     });
-    if (method === "test") {
+    if (method === "test" || method === "balance") {
       // Заказ уже оплачен и отправлен в esimaccess на сервере — никуда переходить не нужно.
     } else if (method === "wallet_pay") {
       tg.openTelegramLink(payInit.redirect_url);
@@ -303,17 +380,49 @@ function pollPaymentStatus(orderId) {
   }, 3000);
 }
 
+async function loadBalance() {
+  const data = await api("/api/balance");
+  document.getElementById("balance-amount").textContent = `$${data.balance.toFixed(2)}`;
+  document.getElementById("referral-desc").textContent = t("referral_desc").replace("{percent}", data.referral_percent);
+  document.getElementById("referral-link-input").value = `https://t.me/${botUsername}?start=${data.referral_code}`;
+
+  const history = document.getElementById("topup-history");
+  history.innerHTML = "";
+  for (const tu of data.top_ups) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `<span class="title">$${tu.amount.toFixed(2)} — ${tu.provider}</span><span class="hint">${tu.status}</span>`;
+    history.appendChild(row);
+  }
+}
+
+async function submitTopup(method) {
+  const input = document.getElementById("topup-amount-input");
+  const amount = parseFloat(input.value);
+  if (!amount || amount < 1) {
+    tg.showAlert(t("balance_amount_label"));
+    return;
+  }
+  try {
+    const result = await api("/api/balance/topup", {
+      method: "POST",
+      body: JSON.stringify({ amount, method }),
+    });
+    tg.openLink(result.redirect_url);
+  } catch (e) {
+    tg.showAlert("Error, please try again.");
+  }
+}
+
+document.getElementById("topup-idram-btn").addEventListener("click", () => submitTopup("idram"));
+document.getElementById("topup-oxapay-btn").addEventListener("click", () => submitTopup("oxapay"));
+document.getElementById("pay-balance-btn").addEventListener("click", () => payWith("balance"));
 document.getElementById("pay-idram-btn").addEventListener("click", () => payWith("idram"));
 document.getElementById("pay-walletpay-btn").addEventListener("click", () => payWith("wallet_pay"));
 document.getElementById("pay-oxapay-btn").addEventListener("click", () => payWith("oxapay"));
 document.getElementById("pay-test-btn").addEventListener("click", () => payWith("test"));
 
 // --- Мои eSIM ---
-function flagEmoji(code) {
-  if (!code || code.length !== 2) return "🌐";
-  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
-}
-
 async function loadMyEsims() {
   const data = await api("/api/my-orders");
   const orders = data.orders || [];
@@ -328,8 +437,13 @@ async function loadMyEsims() {
     <div class="hint">${t("greeting_hello")}${greetingName ? ", " + escapeHtml(greetingName) : ""}</div>
     <div class="esims-count">${activeCount}</div>
     <div class="hint">${t("greeting_active_esims")}</div>
+    <button id="open-balance-btn" class="btn secondary" style="margin-top:12px;">💰 ${t("nav_balance")}</button>
   `;
   list.appendChild(header);
+  document.getElementById("open-balance-btn").addEventListener("click", () => {
+    loadBalance();
+    showScreen("balance");
+  });
 
   if (orders.length === 0) {
     list.innerHTML += `<div class="empty">${t("my_esims_empty")}</div>`;
@@ -341,7 +455,7 @@ async function loadMyEsims() {
     const gb = o.data_amount_mb ? (o.data_amount_mb / 1024).toFixed(1) : null;
     card.innerHTML = `
       <div class="esim-card-top">
-        <div class="esim-flag">${flagEmoji(o.country_code)}</div>
+        <div class="esim-flag">${countryCodeToFlag(o.country_code)}</div>
         <div class="esim-card-main">
           <div class="esim-title">${escapeHtml(o.package_title)}</div>
           <div class="status">${t("status_" + o.status)}</div>
@@ -355,8 +469,41 @@ async function loadMyEsims() {
       ${o.qr_code_data ? `<img class="qr-image" src="${o.qr_code_data}" alt="QR">` : ""}
       ${o.activation_instructions ? `<div class="hint">${t("qr_manual_hint")}</div><div class="iccid">${o.activation_instructions}</div>` : ""}
       ${o.iccid ? `<div class="iccid">ICCID: ${o.iccid}</div>` : ""}
+      ${o.status === "active" && !o.reviewed ? `
+        <div class="review-block">
+          <select class="review-rating-select">
+            <option value="5">★★★★★</option>
+            <option value="4">★★★★</option>
+            <option value="3">★★★</option>
+            <option value="2">★★</option>
+            <option value="1">★</option>
+          </select>
+          <input type="text" class="review-comment-input" placeholder="${t("review_placeholder")}">
+          <button class="btn review-submit-btn">${t("review_submit")}</button>
+        </div>
+      ` : ""}
     `;
     list.appendChild(card);
+
+    const reviewBtn = card.querySelector(".review-submit-btn");
+    if (reviewBtn) {
+      reviewBtn.addEventListener("click", async () => {
+        reviewBtn.disabled = true;
+        try {
+          await api(`/api/orders/${o.id}/review`, {
+            method: "POST",
+            body: JSON.stringify({
+              rating: parseInt(card.querySelector(".review-rating-select").value, 10),
+              comment: card.querySelector(".review-comment-input").value,
+            }),
+          });
+          card.querySelector(".review-block").outerHTML = `<p class="hint">${t("review_thanks")}</p>`;
+        } catch (e) {
+          reviewBtn.disabled = false;
+          tg.showAlert("Error, please try again.");
+        }
+      });
+    }
   }
 }
 
@@ -523,5 +670,6 @@ api("/api/test-payment-enabled")
     testPaymentEnabled = res.enabled;
     walletPayEnabled = res.wallet_pay;
     oxapayEnabled = res.oxapay;
+    botUsername = res.bot_username || "";
   })
   .catch(() => { testPaymentEnabled = false; });

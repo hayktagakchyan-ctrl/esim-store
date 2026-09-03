@@ -39,6 +39,10 @@
     <!-- eSIM: страны -->
     <main id="screen-esim-countries" class="screen" hidden>
       <input id="search-input" class="search" type="text" data-i18n-placeholder="search_country_placeholder">
+      <div class="promo-strip" style="margin-bottom:10px;">
+        <button id="filter-all-btn" class="promo-pill active" type="button" data-i18n="filter_all"></button>
+        <button id="filter-favorites-btn" class="promo-pill" type="button" data-i18n="filter_favorites"></button>
+      </div>
       <div id="country-list" class="list"></div>
     </main>
 
@@ -51,7 +55,8 @@
     <main id="screen-esim-checkout" class="screen" hidden>
       <div id="checkout-summary" class="card"></div>
       <div id="payment-methods">
-        <button id="pay-idram-btn" class="primary-btn" data-i18n="pay_idram"></button>
+        <button id="pay-balance-btn" class="primary-btn" data-i18n="checkout_pay_balance" hidden></button>
+        <button id="pay-idram-btn" class="primary-btn" style="margin-top:8px;" data-i18n="pay_idram"></button>
         <button id="pay-walletpay-btn" class="primary-btn" style="margin-top:8px;" data-i18n="pay_wallet"></button>
         <button id="pay-oxapay-btn" class="primary-btn" style="margin-top:8px;" data-i18n="pay_oxapay"></button>
         <button id="pay-test-btn" class="primary-btn test-btn" style="margin-top:8px;" hidden>🧪 Тестовая оплата</button>
@@ -70,6 +75,29 @@
     <!-- Мои eSIM -->
     <main id="screen-my-esims" class="screen" hidden>
       <div id="my-esims-list" class="list"></div>
+    </main>
+
+    <!-- Баланс / пополнение / рефералка -->
+    <main id="screen-balance" class="screen" hidden>
+      <div class="card" style="text-align:center;">
+        <div class="hint" data-i18n="balance_current"></div>
+        <div id="balance-amount" class="esims-count">$0.00</div>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 10px;" data-i18n="balance_topup_title"></h3>
+        <input id="topup-amount-input" class="search" type="number" min="1" placeholder="10" style="margin-bottom:10px;">
+        <button id="topup-idram-btn" class="primary-btn" data-i18n="pay_idram"></button>
+        <button id="topup-oxapay-btn" class="primary-btn" style="margin-top:8px;" data-i18n="pay_oxapay"></button>
+      </div>
+
+      <div class="card">
+        <h3 style="margin:0 0 8px;" data-i18n="referral_title"></h3>
+        <p id="referral-desc" class="hint"></p>
+        <input id="referral-link-input" class="search" type="text" readonly onclick="this.select()">
+      </div>
+
+      <div id="topup-history" class="list"></div>
     </main>
 
     <!-- Чаты: список -->

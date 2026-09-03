@@ -29,6 +29,30 @@ const I18N = {
   stat_data: { ru: "Данные", hy: "Տվյալներ", en: "Data" },
   stat_validity: { ru: "Срок", hy: "Ժամկետ", en: "Validity" },
   days_short: { ru: "дн.", hy: "օր", en: "days" },
+
+  nav_balance: { ru: "Мой баланс", hy: "Իմ հաշիվը", en: "My balance" },
+  balance_current: { ru: "Текущий баланс", hy: "Ընթացիկ մնացորդ", en: "Current balance" },
+  balance_topup_title: { ru: "Пополнить баланс", hy: "Համալրել հաշիվը", en: "Top up balance" },
+  balance_amount_label: { ru: "Введи сумму, $", hy: "Մուտքագրիր գումարը, $", en: "Enter amount, $" },
+  checkout_pay_balance: { ru: "Оплатить с баланса", hy: "Վճարել հաշվից", en: "Pay from balance" },
+
+  referral_title: { ru: "Пригласи друга", hy: "Հրավիրիր ընկերոջ", en: "Invite a friend" },
+  referral_desc: {
+    ru: "Получай {percent}% от суммы первой покупки каждого приглашённого — начисляется на баланс автоматически.",
+    hy: "Ստացիր {percent}% հրավիրվածի առաջին գնումից — ավտոմատ կերպով ավելացվում է հաշվին։",
+    en: "Get {percent}% of each invited friend's first purchase — credited to your balance automatically.",
+  },
+
+  filter_all: { ru: "Все", hy: "Բոլորը", en: "All" },
+  filter_favorites: { ru: "★ Избранное", hy: "★ Ընտրյալներ", en: "★ Favorites" },
+  favorite_add: { ru: "В избранное", hy: "Ավելացնել ընտրյալներում", en: "Add to favorites" },
+  favorite_remove: { ru: "Убрать из избранного", hy: "Հեռացնել ընտրյալներից", en: "Remove from favorites" },
+
+  reviews_count: { ru: "отзывов", hy: "կարծիք", en: "reviews" },
+  no_reviews_yet: { ru: "Пока нет отзывов", hy: "Դեռ կարծիքներ չկան", en: "No reviews yet" },
+  review_placeholder: { ru: "Как всё прошло? (необязательно)", hy: "Ինչպե՞ս անցավ", en: "How did it go? (optional)" },
+  review_submit: { ru: "Отправить отзыв", hy: "Ուղարկել կարծիքը", en: "Submit review" },
+  review_thanks: { ru: "Спасибо за отзыв!", hy: "Շնորհակալություն!", en: "Thanks for your review!" },
   qr_manual_hint: { ru: "Не сканируется? Введи вручную в настройках телефона:", hy: "Չի սկանավորվում: Մուտքագրիր ձեռքով հեռախոսի կարգավորումներում.", en: "Can't scan? Enter this manually in your phone settings:" },
   status_pending_payment: { ru: "Ждёт оплаты", hy: "Սպասում է վճարման", en: "Awaiting payment" },
   status_paid: { ru: "Оплачен", hy: "Վճարված է", en: "Paid" },

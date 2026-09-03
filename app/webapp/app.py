@@ -9,6 +9,7 @@ uvicorn app.webapp.app:app --port 8001
 """
 from pathlib import Path
 import logging
+import secrets
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request
@@ -21,7 +22,7 @@ from app.config import settings
 from app.database.db import get_session, init_db
 
 logging.basicConfig(level=logging.INFO)
-from app.database.models import Package, User, Order, OrderStatus
+from app.database.models import Package, User, Order, OrderStatus, Favorite, Review, TopUp, PaymentProvider, PaymentStatus
 from app.webapp.auth import get_current_user
 from app.webapp import webhooks, payments, products, conversations, admin_chat, shop
 
@@ -109,17 +110,29 @@ async def list_packages(country: str):
             select(Package).where(Package.country_code == country, Package.is_active.is_(True))
         )
         packages = list(result.scalars())
-    return [
-        {
-            "id": p.id,
-            "title": p.title,
-            "data_amount_mb": p.data_amount_mb,
-            "validity_days": p.validity_days,
-            "price": float(p.sell_price),
-            "currency": p.currency,
-        }
-        for p in packages
-    ]
+
+        reviews = list((
+            await session.execute(select(Review.rating).where(Review.country_code == country))
+        ).scalars())
+
+    review_count = len(reviews)
+    avg_rating = round(sum(reviews) / review_count, 1) if review_count else None
+
+    return {
+        "packages": [
+            {
+                "id": p.id,
+                "title": p.title,
+                "data_amount_mb": p.data_amount_mb,
+                "validity_days": p.validity_days,
+                "price": float(p.sell_price),
+                "currency": p.currency,
+            }
+            for p in packages
+        ],
+        "avg_rating": avg_rating,
+        "review_count": review_count,
+    }
 
 
 class CreateOrderRequest(BaseModel):
@@ -161,6 +174,13 @@ async def my_orders(user: User = Depends(get_current_user)):
         for order in orders:
             await session.refresh(order, attribute_names=["package"])
 
+        order_ids = [o.id for o in orders]
+        reviewed_order_ids = set()
+        if order_ids:
+            reviewed_order_ids = set((
+                await session.execute(select(Review.order_id).where(Review.order_id.in_(order_ids)))
+            ).scalars())
+
     return {
         "full_name": user.full_name,
         "orders": [
@@ -176,10 +196,73 @@ async def my_orders(user: User = Depends(get_current_user)):
                 "activation_instructions": o.activation_instructions,
                 "price": float(o.price_charged),
                 "currency": o.currency,
+                "reviewed": o.id in reviewed_order_ids,
             }
             for o in orders
         ],
     }
+
+
+@app.get("/api/favorites")
+async def get_favorites(user: User = Depends(get_current_user)):
+    async with get_session() as session:
+        codes = list((
+            await session.execute(select(Favorite.country_code).where(Favorite.user_id == user.id))
+        ).scalars())
+    return {"codes": codes}
+
+
+class FavoriteToggleRequest(BaseModel):
+    country_code: str
+
+
+@app.post("/api/favorites/toggle")
+async def toggle_favorite(body: FavoriteToggleRequest, user: User = Depends(get_current_user)):
+    async with get_session() as session:
+        existing = (
+            await session.execute(
+                select(Favorite).where(Favorite.user_id == user.id, Favorite.country_code == body.country_code)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            await session.delete(existing)
+            is_favorite = False
+        else:
+            session.add(Favorite(user_id=user.id, country_code=body.country_code))
+            is_favorite = True
+        await session.commit()
+    return {"is_favorite": is_favorite}
+
+
+class ReviewRequest(BaseModel):
+    rating: int
+    comment: str = ""
+
+
+@app.post("/api/orders/{order_id}/review")
+async def submit_review(order_id: int, body: ReviewRequest, user: User = Depends(get_current_user)):
+    if body.rating < 1 or body.rating > 5:
+        raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
+
+    async with get_session() as session:
+        order = await session.get(Order, order_id)
+        if order is None or order.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        if order.status != OrderStatus.ACTIVE:
+            raise HTTPException(status_code=400, detail="Отзыв можно оставить только на активированный eSIM")
+
+        existing = (await session.execute(select(Review).where(Review.order_id == order.id))).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=400, detail="Отзыв на этот заказ уже оставлен")
+
+        await session.refresh(order, attribute_names=["package"])
+        session.add(Review(
+            user_id=user.id, order_id=order.id,
+            country_code=order.package.country_code, rating=body.rating, comment=body.comment.strip() or None,
+        ))
+        await session.commit()
+
+    return {"ok": True}
 
 
 # Статика инбокса чатов для админа — регистрируется ДО общего "/", иначе тот

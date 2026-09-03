@@ -1,5 +1,7 @@
+import secrets
+
 from aiogram import Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 from aiogram.types import Message
 from sqlalchemy import select
 
@@ -12,7 +14,7 @@ router = Router(name="catalog")
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message) -> None:
+async def cmd_start(message: Message, command: CommandObject) -> None:
     lang = detect_lang(message.from_user.language_code)
 
     async with get_session() as session:
@@ -21,10 +23,23 @@ async def cmd_start(message: Message) -> None:
         )
         user = result.scalar_one_or_none()
         if user is None:
+            # Реферальная ссылка на бота выглядит как t.me/бот?start=КОД — Telegram
+            # сам передаёт этот КОД сюда как command.args.
+            referred_by_id = None
+            ref_code = (command.args or "").strip()
+            if ref_code:
+                referrer = (
+                    await session.execute(select(User).where(User.referral_code == ref_code))
+                ).scalar_one_or_none()
+                if referrer is not None:
+                    referred_by_id = referrer.id
+
             user = User(
                 telegram_id=message.from_user.id,
                 username=message.from_user.username,
                 full_name=message.from_user.full_name,
+                referral_code=secrets.token_urlsafe(6),
+                referred_by_id=referred_by_id,
             )
             session.add(user)
             await session.commit()

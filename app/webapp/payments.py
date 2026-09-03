@@ -60,6 +60,7 @@ async def test_payment_enabled():
         "enabled": settings.ENABLE_TEST_PAYMENT,  # тестовая оплата (старое имя поля)
         "wallet_pay": settings.ENABLE_WALLET_PAY,
         "oxapay": settings.ENABLE_OXAPAY,
+        "bot_username": settings.CLIENT_BOT_USERNAME,
     }
 
 
@@ -99,12 +100,17 @@ async def _fulfill_order(session, order: Order) -> None:
 
 
 async def _credit_topup(session, top_up: TopUp) -> None:
-    """Подтверждённое пополнение — зачисляет деньги на баланс аккаунта."""
+    """Подтверждённое пополнение — зачисляет деньги на баланс. Владелец пополнения —
+    либо аккаунт сайта, либо пользователь бота (см. модель TopUp)."""
     top_up.status = PaymentStatus.PAID
     await session.commit()
 
-    account = await session.get(WebsiteAccount, top_up.website_account_id)
-    account.balance = round(account.balance + top_up.amount, 2)
+    if top_up.website_account_id is not None:
+        account = await session.get(WebsiteAccount, top_up.website_account_id)
+        account.balance = round(account.balance + top_up.amount, 2)
+    else:
+        user = await session.get(User, top_up.user_id)
+        user.balance = round(user.balance + top_up.amount, 2)
     await session.commit()
 
 
@@ -115,16 +121,21 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
     """
     Вызывается при переходе заказа в ACTIVE (см. app/webapp/webhooks.py).
     Разово (per referral_bonus_paid) зачисляет рефереру бонус на баланс —
-    только если у заказа вообще есть привязанный аккаунт сайта, у него
-    указан пригласивший, и бонус за него ещё не выплачивался.
+    работает и для заказов с сайта (WebsiteAccount), и для заказов из бота
+    (User) — смотрит, что из двух реально привязано к заказу.
     """
-    if order.website_account_id is None:
+    if order.website_account_id is not None:
+        model, owner_id = WebsiteAccount, order.website_account_id
+    elif order.user_id is not None:
+        model, owner_id = User, order.user_id
+    else:
         return
-    account = await session.get(WebsiteAccount, order.website_account_id)
+
+    account = await session.get(model, owner_id)
     if account is None or account.referred_by_id is None or account.referral_bonus_paid:
         return
 
-    referrer = await session.get(WebsiteAccount, account.referred_by_id)
+    referrer = await session.get(model, account.referred_by_id)
     if referrer is None:
         return
 
@@ -135,14 +146,14 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
 
 
 class InitiatePaymentRequest(BaseModel):
-    method: str  # "idram" | "wallet_pay" | "oxapay"
+    method: str  # "idram" | "wallet_pay" | "oxapay" | "balance"
 
 
 @router.post("/api/orders/{order_id}/pay")
 async def initiate_payment(
     order_id: int, body: InitiatePaymentRequest, user: User = Depends(get_current_user)
 ):
-    if body.method not in PROVIDER_BY_METHOD:
+    if body.method not in PROVIDER_BY_METHOD and body.method != "balance":
         raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
     if body.method == "test" and not settings.ENABLE_TEST_PAYMENT:
         # Проверка и на сервере, не только в интерфейсе — на случай, если кто-то
@@ -163,66 +174,82 @@ async def initiate_payment(
         external_id = str(uuid.uuid4())
         amount_str = f"{float(order.price_charged):.2f}"
 
-        payment = Payment(
-            order_id=order.id,
-            provider=PROVIDER_BY_METHOD[body.method],
-            status=PaymentStatus.PENDING,
-            amount=order.price_charged,
-            currency=order.currency,
-            external_payment_id=external_id,
-        )
-
-        if body.method == "idram":
-            session.add(payment)
-            await session.commit()
-            redirect_url = f"{settings.PUBLIC_BASE_URL}/pay/idram/{external_id}"
-
-        elif body.method == "wallet_pay":
-            try:
-                wp_order = await wallet_pay_client.create_order(
-                    amount=amount_str,
-                    currency_code=order.currency,
-                    external_id=external_id,
-                    description=f"Заказ №{order.id}",
-                    customer_telegram_user_id=user.telegram_id,
-                )
-            except WalletPayError as exc:
-                raise HTTPException(status_code=502, detail=f"Wallet Pay: {exc}")
-
-            payment.provider_order_id = str(wp_order["id"])
-            payment.pay_link = wp_order["payLink"]
-            session.add(payment)
-            await session.commit()
-            redirect_url = wp_order["payLink"]
-
-        elif body.method == "oxapay":
-            try:
-                invoice = await oxapay_client.create_invoice(
-                    amount=float(order.price_charged),
-                    currency=order.currency,
-                    order_id=external_id,
-                    description=f"Заказ №{order.id}",
-                    callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
-                    return_url=f"{settings.PUBLIC_BASE_URL}/pay/oxapay/success",
-                )
-            except OxaPayError as exc:
-                raise HTTPException(status_code=502, detail=f"OxaPay: {exc}")
-
-            payment.provider_order_id = invoice["track_id"]
-            payment.pay_link = invoice["payment_url"]
-            session.add(payment)
-            await session.commit()
-            redirect_url = invoice["payment_url"]
-
-        else:  # "test" — уже проверили выше, что settings.ENABLE_TEST_PAYMENT включён
-            # Сразу "оплачен", без редиректа никуда. Дальше — тот же самый настоящий
-            # вызов esimaccess, что и для любого реального способа оплаты выше.
-            payment.status = PaymentStatus.PAID
+        if body.method == "balance":
+            db_user = await session.get(User, user.id)
+            if db_user.balance < float(order.price_charged):
+                raise HTTPException(status_code=402, detail="Недостаточно средств на балансе")
+            db_user.balance = round(db_user.balance - float(order.price_charged), 2)
+            payment = Payment(
+                order_id=order.id, provider=PaymentProvider.BALANCE, status=PaymentStatus.PAID,
+                amount=order.price_charged, currency=order.currency, external_payment_id=external_id,
+            )
             session.add(payment)
             order.status = OrderStatus.PAID
             await session.commit()
             await _fulfill_order(session, order)
             redirect_url = None
+
+        else:
+            payment = Payment(
+                order_id=order.id,
+                provider=PROVIDER_BY_METHOD[body.method],
+                status=PaymentStatus.PENDING,
+                amount=order.price_charged,
+                currency=order.currency,
+                external_payment_id=external_id,
+            )
+
+            if body.method == "idram":
+                session.add(payment)
+                await session.commit()
+                redirect_url = f"{settings.PUBLIC_BASE_URL}/pay/idram/{external_id}"
+
+            elif body.method == "wallet_pay":
+                try:
+                    wp_order = await wallet_pay_client.create_order(
+                        amount=amount_str,
+                        currency_code=order.currency,
+                        external_id=external_id,
+                        description=f"Заказ №{order.id}",
+                        customer_telegram_user_id=user.telegram_id,
+                    )
+                except WalletPayError as exc:
+                    raise HTTPException(status_code=502, detail=f"Wallet Pay: {exc}")
+
+                payment.provider_order_id = str(wp_order["id"])
+                payment.pay_link = wp_order["payLink"]
+                session.add(payment)
+                await session.commit()
+                redirect_url = wp_order["payLink"]
+
+            elif body.method == "oxapay":
+                try:
+                    invoice = await oxapay_client.create_invoice(
+                        amount=float(order.price_charged),
+                        currency=order.currency,
+                        order_id=external_id,
+                        description=f"Заказ №{order.id}",
+                        callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
+                        return_url=f"{settings.PUBLIC_BASE_URL}/pay/oxapay/success",
+                    )
+                except OxaPayError as exc:
+                    raise HTTPException(status_code=502, detail=f"OxaPay: {exc}")
+
+                payment.provider_order_id = invoice["track_id"]
+                payment.pay_link = invoice["payment_url"]
+                session.add(payment)
+                await session.commit()
+                redirect_url = invoice["payment_url"]
+
+            else:  # "test" — уже проверили выше, что settings.ENABLE_TEST_PAYMENT включён
+                # Сразу "оплачен", без редиректа никуда. Дальше — тот же самый настоящий
+                # вызов esimaccess, что и для любого реального способа оплаты выше.
+                payment.status = PaymentStatus.PAID
+                session.add(payment)
+                order.status = OrderStatus.PAID
+                await session.commit()
+                await _fulfill_order(session, order)
+                redirect_url = None
 
     return {"redirect_url": redirect_url, "payment_external_id": external_id}
 
@@ -408,3 +435,78 @@ async def oxapay_webhook(request: Request, hmac_header: str = Header(default="",
             await _credit_topup(session, top_up)
 
     return "OK"
+
+
+# --- Баланс и пополнение — версия для Mini App (Telegram User, не сайт) ---
+
+@router.get("/api/balance")
+async def get_balance(user: User = Depends(get_current_user)):
+    async with get_session() as session:
+        db_user = await session.get(User, user.id)
+        if db_user.referral_code is None:
+            # Старые пользователи (созданы до появления рефералки) — генерируем лениво при первом обращении.
+            db_user.referral_code = secrets.token_urlsafe(6)
+            await session.commit()
+
+        top_ups = list((
+            await session.execute(
+                select(TopUp).where(TopUp.user_id == user.id).order_by(TopUp.created_at.desc()).limit(20)
+            )
+        ).scalars())
+
+    return {
+        "balance": db_user.balance,
+        "referral_code": db_user.referral_code,
+        "referral_percent": REFERRAL_BONUS_PERCENT,
+        "top_ups": [
+            {"amount": t.amount, "provider": t.provider.value, "status": t.status.value}
+            for t in top_ups
+        ],
+    }
+
+
+class TopUpRequest(BaseModel):
+    amount: float
+    method: str  # "idram" | "oxapay"
+
+
+@router.post("/api/balance/topup")
+async def topup_balance(body: TopUpRequest, user: User = Depends(get_current_user)):
+    if body.amount < 1:
+        raise HTTPException(status_code=400, detail="Минимальная сумма пополнения — $1")
+    if body.method not in ("idram", "oxapay"):
+        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
+    if body.method == "oxapay" and not settings.ENABLE_OXAPAY:
+        raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+
+    external_id = str(uuid.uuid4())
+    amount = round(body.amount, 2)
+
+    async with get_session() as session:
+        top_up = TopUp(
+            user_id=user.id, amount=amount, currency="USD",
+            provider=PaymentProvider.IDRAM if body.method == "idram" else PaymentProvider.OXAPAY,
+            status=PaymentStatus.PENDING, external_payment_id=external_id,
+        )
+
+        if body.method == "idram":
+            session.add(top_up)
+            await session.commit()
+            redirect_url = f"{settings.PUBLIC_BASE_URL}/pay/idram/{external_id}"
+        else:
+            try:
+                invoice = await oxapay_client.create_invoice(
+                    amount=amount, currency="USD", order_id=external_id,
+                    description="Пополнение баланса",
+                    callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
+                    return_url=f"{settings.PUBLIC_BASE_URL}/pay/oxapay/success",
+                )
+            except OxaPayError as exc:
+                raise HTTPException(status_code=502, detail=f"OxaPay: {exc}")
+            top_up.provider_order_id = invoice["track_id"]
+            top_up.pay_link = invoice["payment_url"]
+            session.add(top_up)
+            await session.commit()
+            redirect_url = invoice["payment_url"]
+
+    return {"redirect_url": redirect_url}

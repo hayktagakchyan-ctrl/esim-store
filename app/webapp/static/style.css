@@ -387,6 +387,71 @@ main.screen[hidden] { display: none !important; }
 .esim-stat-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
 .esim-stat-value { font-size: 15px; font-weight: 700; margin-top: 2px; }
 
+/* --- Небольшая вторичная кнопка (баланс, избранное) --- */
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.secondary { background: var(--surface-secondary); color: var(--text); }
+.btn:active { transform: scale(0.97); }
+
+/* --- Плашки-фильтры (Все / Избранное) --- */
+.promo-strip { display: flex; gap: 8px; overflow-x: auto; }
+.promo-pill {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.promo-pill.active { background: var(--accent-gradient); color: #fff; }
+
+/* --- Сердечко избранного на строке страны --- */
+.fav-heart-btn {
+  border: none;
+  background: none;
+  font-size: 18px;
+  color: var(--accent);
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+/* --- Форма отзыва на карточке eSIM --- */
+.review-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.review-rating-select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.review-comment-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.review-submit-btn { width: 100%; }
+
 /* --- Шапка чекаута: крупная цена + флаг, как ценник акции в референсе --- */
 .checkout-hero { text-align: center; padding: 10px 0 16px; }
 .checkout-hero-flag {

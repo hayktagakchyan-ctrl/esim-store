@@ -161,19 +161,25 @@ async def my_orders(user: User = Depends(get_current_user)):
         for order in orders:
             await session.refresh(order, attribute_names=["package"])
 
-    return [
-        {
-            "id": o.id,
-            "package_title": o.package.title,
-            "status": o.status.value,
-            "iccid": o.iccid,
-            "qr_code_data": o.qr_code_data,
-            "activation_instructions": o.activation_instructions,
-            "price": float(o.price_charged),
-            "currency": o.currency,
-        }
-        for o in orders
-    ]
+    return {
+        "full_name": user.full_name,
+        "orders": [
+            {
+                "id": o.id,
+                "package_title": o.package.title,
+                "country_code": o.package.country_code,
+                "data_amount_mb": o.package.data_amount_mb,
+                "validity_days": o.package.validity_days,
+                "status": o.status.value,
+                "iccid": o.iccid,
+                "qr_code_data": o.qr_code_data,
+                "activation_instructions": o.activation_instructions,
+                "price": float(o.price_charged),
+                "currency": o.currency,
+            }
+            for o in orders
+        ],
+    }
 
 
 # Статика инбокса чатов для админа — регистрируется ДО общего "/", иначе тот

@@ -5,14 +5,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
   <title>{% block title %}{{ t("brand") }}{% endblock %}</title>
-  <link rel="stylesheet" href="/shop-static/style.css?v=4">
+  <link rel="stylesheet" href="/shop-static/style.css?v=5">
   <script src="/shop-static/theme.js"></script>
   {% block head %}{% endblock %}
 </head>
 <body>
   <div class="navbar-wrap">
     <nav class="navbar">
-      <a class="logo" href="/shop/">📶 {{ t("brand") }}</a>
+      <a class="logo" href="/shop/">
+        <img class="brand-logo brand-logo-light" src="/shop-static/img/logo-light.jpg" alt="KaLine">
+        <img class="brand-logo brand-logo-dark" src="/shop-static/img/logo-dark.jpg" alt="KaLine">
+        {{ t("brand") }}
+      </a>
       <div class="nav-links">
         <a href="/shop/catalog">{{ t("nav_catalog") }}</a>
         <a href="/shop/services">{{ t("nav_services") }}</a>
@@ -20,6 +24,7 @@
         {% if account %}
           <a href="/shop/account/orders">{{ t("nav_my_orders") }}</a>
           <a href="/shop/account/chats">{{ t("nav_my_chats") }}</a>
+          <a href="/shop/account/balance">{{ t("nav_balance") }}</a>
           <a href="/shop/account/settings">{{ t("nav_settings") }}</a>
           <a href="/shop/logout">{{ t("nav_logout") }}</a>
         {% else %}

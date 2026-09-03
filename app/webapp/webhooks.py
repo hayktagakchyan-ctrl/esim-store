@@ -23,6 +23,7 @@ from app.database.db import get_session
 from app.database.models import Order, OrderStatus, WebhookEvent
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.notify_bots import client_notify_bot as _notify_bot
+from app.webapp.payments import maybe_credit_referral_bonus
 
 router = APIRouter()
 
@@ -115,6 +116,8 @@ async def _handle_order_status(session, content: dict) -> None:
     order.activation_instructions = esim.get("ac")  # LPA-код для ручного ввода, если QR не сканируется
     order.status = OrderStatus.ACTIVE
     await session.commit()
+
+    await maybe_credit_referral_bonus(session, order)
 
     await session.refresh(order, attribute_names=["user"])
     if order.iccid and order.user is not None and order.user.telegram_id:

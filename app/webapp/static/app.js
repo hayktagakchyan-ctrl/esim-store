@@ -232,9 +232,17 @@ let oxapayEnabled = true;
 function openCheckout(pkg) {
   selectedPackage = pkg;
   const summary = document.getElementById("checkout-summary");
+  const gb = pkg.data_amount_mb ? (pkg.data_amount_mb / 1024).toFixed(1) : null;
   summary.innerHTML = `
-    <div class="row-line"><span>${selectedCountry.name}</span><span>${pkg.title}</span></div>
-    <div class="row-line total"><span>${t("checkout_total")}</span><span>${pkg.price} ${pkg.currency}</span></div>
+    <div class="checkout-hero">
+      <div class="checkout-hero-flag">${flagEmoji(selectedCountry.code)}</div>
+      <div class="checkout-hero-title">${escapeHtml(selectedCountry.name)}</div>
+      <div class="checkout-hero-price">${pkg.price} <span>${pkg.currency}</span></div>
+    </div>
+    <div class="esim-stat-grid">
+      ${gb ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_data")}</div><div class="esim-stat-value">${gb} GB</div></div>` : ""}
+      ${pkg.validity_days ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_validity")}</div><div class="esim-stat-value">${pkg.validity_days} ${t("days_short")}</div></div>` : ""}
+    </div>
   `;
   document.getElementById("payment-methods").hidden = false;
   document.getElementById("payment-waiting").hidden = true;
@@ -301,20 +309,49 @@ document.getElementById("pay-oxapay-btn").addEventListener("click", () => payWit
 document.getElementById("pay-test-btn").addEventListener("click", () => payWith("test"));
 
 // --- Мои eSIM ---
+function flagEmoji(code) {
+  if (!code || code.length !== 2) return "🌐";
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
+
 async function loadMyEsims() {
-  const orders = await api("/api/my-orders");
+  const data = await api("/api/my-orders");
+  const orders = data.orders || [];
   const list = document.getElementById("my-esims-list");
   list.innerHTML = "";
+
+  const activeCount = orders.filter(o => o.status === "active").length;
+  const greetingName = (data.full_name || "").split(" ")[0] || "";
+  const header = document.createElement("div");
+  header.className = "esims-greeting";
+  header.innerHTML = `
+    <div class="hint">${t("greeting_hello")}${greetingName ? ", " + escapeHtml(greetingName) : ""}</div>
+    <div class="esims-count">${activeCount}</div>
+    <div class="hint">${t("greeting_active_esims")}</div>
+  `;
+  list.appendChild(header);
+
   if (orders.length === 0) {
-    list.innerHTML = `<div class="empty">${t("my_esims_empty")}</div>`;
+    list.innerHTML += `<div class="empty">${t("my_esims_empty")}</div>`;
     return;
   }
   for (const o of orders) {
     const card = document.createElement("div");
     card.className = "esim-card";
+    const gb = o.data_amount_mb ? (o.data_amount_mb / 1024).toFixed(1) : null;
     card.innerHTML = `
-      <div>${o.package_title}</div>
-      <div class="status">${t("status_" + o.status)}</div>
+      <div class="esim-card-top">
+        <div class="esim-flag">${flagEmoji(o.country_code)}</div>
+        <div class="esim-card-main">
+          <div class="esim-title">${escapeHtml(o.package_title)}</div>
+          <div class="status">${t("status_" + o.status)}</div>
+        </div>
+        <div class="esim-price">${o.price} ${o.currency}</div>
+      </div>
+      <div class="esim-stat-grid">
+        ${gb ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_data")}</div><div class="esim-stat-value">${gb} GB</div></div>` : ""}
+        ${o.validity_days ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_validity")}</div><div class="esim-stat-value">${o.validity_days} ${t("days_short")}</div></div>` : ""}
+      </div>
       ${o.qr_code_data ? `<img class="qr-image" src="${o.qr_code_data}" alt="QR">` : ""}
       ${o.activation_instructions ? `<div class="hint">${t("qr_manual_hint")}</div><div class="iccid">${o.activation_instructions}</div>` : ""}
       ${o.iccid ? `<div class="iccid">ICCID: ${o.iccid}</div>` : ""}

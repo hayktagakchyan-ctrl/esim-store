@@ -287,6 +287,38 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
     "settings_password_mismatch": {"ru": "Новые пароли не совпадают.", "hy": "Նոր գաղտնաբառերը չեն համընկնում։", "en": "New passwords don't match."},
     "password_too_short": {"ru": "Пароль должен быть не короче 8 символов.", "hy": "Գաղտնաբառը պետք է լինի առնվազն 8 նիշ։", "en": "Password must be at least 8 characters."},
 
+    "nav_balance": {"ru": "Мой баланс", "hy": "Իմ հաշիվը", "en": "My balance"},
+    "balance_current": {"ru": "Текущий баланс", "hy": "Ընթացիկ մնացորդ", "en": "Current balance"},
+    "balance_topup_title": {"ru": "Пополнить баланс", "hy": "Համալրել հաշիվը", "en": "Top up balance"},
+    "balance_amount_label": {"ru": "Сумма, $", "hy": "Գումար, $", "en": "Amount, $"},
+    "balance_history_title": {"ru": "История пополнений", "hy": "Համալրումների պատմություն", "en": "Top-up history"},
+    "checkout_pay_balance": {"ru": "Оплатить с баланса", "hy": "Վճարել հաշվից", "en": "Pay from balance"},
+    "checkout_balance_low": {"ru": "Недостаточно на балансе — сейчас там", "hy": "Հաշվում բավարար չէ — այժմ կա", "en": "Not enough balance — you currently have"},
+
+    "referral_title": {"ru": "Пригласи друга", "hy": "Հրավիրիր ընկերոջ", "en": "Invite a friend"},
+    "referral_desc": {
+        "ru": "Получай {percent}% от суммы первой покупки каждого приглашённого — начисляется на баланс автоматически. Отправь эту ссылку:",
+        "hy": "Ստացիր {percent}% հրավիրվածի առաջին գնումից — ավտոմատ կերպով ավելացվում է հաշվին։ Ուղարկիր այս հղումը՝",
+        "en": "Get {percent}% of each invited friend's first purchase — credited to your balance automatically. Share this link:",
+    },
+
+    "favorite_add": {"ru": "В избранное", "hy": "Ավելացնել ընտրյալներում", "en": "Add to favorites"},
+    "favorite_remove": {"ru": "Убрать из избранного", "hy": "Հեռացնել ընտրյալներից", "en": "Remove from favorites"},
+
+    "search_placeholder": {"ru": "Поиск по странам…", "hy": "Փնտրել երկրներ…", "en": "Search countries…"},
+    "filter_all": {"ru": "Все", "hy": "Բոլորը", "en": "All"},
+    "filter_europe": {"ru": "Европа", "hy": "Եվրոպա", "en": "Europe"},
+    "filter_asia": {"ru": "Азия", "hy": "Ասիա", "en": "Asia"},
+    "filter_favorites": {"ru": "★ Избранное", "hy": "★ Ընտրյալներ", "en": "★ Favorites"},
+
+    "review_title": {"ru": "Оставить отзыв", "hy": "Թողնել կարծիք", "en": "Leave a review"},
+    "review_placeholder": {"ru": "Как всё прошло? (необязательно)", "hy": "Ինչպե՞ս անցավ (ոչ պարտադիր)", "en": "How did it go? (optional)"},
+    "review_submit": {"ru": "Отправить отзыв", "hy": "Ուղարկել կարծիքը", "en": "Submit review"},
+    "review_thanks": {"ru": "Спасибо за отзыв!", "hy": "Շնորհակալություն կարծիքի համար!", "en": "Thanks for your review!"},
+    "reviews_count": {"ru": "отзывов", "hy": "կարծիք", "en": "reviews"},
+    "no_reviews_yet": {"ru": "Пока нет отзывов — стань первым.", "hy": "Դեռ կարծիքներ չկան։", "en": "No reviews yet — be the first."},
+    "days_short": {"ru": "дн.", "hy": "օր", "en": "days"},
+
     "faq_title": {"ru": "Частые вопросы", "hy": "Հաճախակի հարցեր", "en": "FAQ"},
     "faq_q1": {"ru": "Как быстро активируется eSIM?", "hy": "Որքա՞ն արագ է ակտիվանում eSIM-ը", "en": "How fast does the eSIM activate?"},
     "faq_a1": {

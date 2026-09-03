@@ -7,48 +7,67 @@
    шапке, выбор запоминается (localStorage).
    ============================================================ */
 
+/* ============================================================
+   KaLine — Apple/iOS-style, фирменная палитра: глубокий navy, насыщенный
+   purple, мягкий cyan-акцент (под цвет логотипа), системный шрифтовой
+   стек (-apple-system → SF Pro на устройствах Apple). Тема переключается
+   атрибутом data-theme на <html> (см. app/webapp/shop_static/theme.js) —
+   по умолчанию системная тема устройства, либо вручную ползунком в шапке.
+   ============================================================ */
+
 :root {
-  --bg: #F2F2F7;
+  --bg: #F4F5FA;
   --surface: #FFFFFF;
-  --surface-secondary: #F9F9FB;
-  --border: #E5E5EA;
-  --text: #1C1C1E;
-  --text-secondary: #6E6E73;
-  --text-tertiary: #AEAEB2;
-  --accent: #007AFF;
-  --accent-gradient: linear-gradient(180deg, #2B9BFF 0%, #0A6EDB 100%);
-  --hero-gradient: linear-gradient(180deg, #1C1C1E 0%, #3A3A3C 100%);
-  --icon-bg-gradient: linear-gradient(180deg, #EAF3FF 0%, #DCEBFF 100%);
+  --surface-secondary: #ECEEF7;
+  --border: #E1E3F0;
+  --text: #14162B;
+  --text-secondary: #6B6E85;
+  --text-tertiary: #A6A9C0;
+  --accent: #6E5BFA;
+  --accent-gradient: linear-gradient(135deg, #6E5BFA 0%, #3EC6E0 100%);
+  --hero-gradient: linear-gradient(135deg, #14162B 0%, #4A3F8A 100%);
+  --icon-bg-gradient: linear-gradient(135deg, #EDEAFF 0%, #E1F7FB 100%);
   --navbar-bg: rgba(255, 255, 255, 0.72);
-  --glow-1: rgba(43, 155, 255, 0.10);
-  --glow-2: rgba(175, 82, 222, 0.08);
-  --radius-lg: 22px;
-  --radius-md: 14px;
+  --glow-1: rgba(110, 91, 250, 0.10);
+  --glow-2: rgba(62, 198, 224, 0.10);
+  --radius-lg: 26px;
+  --radius-md: 18px;
   --max-width: 1080px;
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.06);
-  --shadow-float: 0 8px 30px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.05);
+  --shadow-card: 0 1px 2px rgba(20,22,50,0.05), 0 10px 28px rgba(20,22,50,0.07);
+  --shadow-float: 0 10px 34px rgba(20,22,50,0.14), 0 2px 8px rgba(20,22,50,0.06);
 }
 
 [data-theme="dark"] {
-  --bg: #0B0B0F;
-  --surface: #1C1C1E;
-  --surface-secondary: #2C2C2E;
-  --border: #38383A;
-  --text: #FFFFFF;
-  --text-secondary: #98989D;
-  --text-tertiary: #636366;
-  --accent: #0A84FF;
-  --accent-gradient: linear-gradient(180deg, #409CFF 0%, #0A6EDB 100%);
-  --hero-gradient: linear-gradient(180deg, #FFFFFF 0%, #C7C7CC 100%);
-  --icon-bg-gradient: linear-gradient(180deg, #14263E 0%, #0F1E33 100%);
-  --navbar-bg: rgba(28, 28, 30, 0.62);
-  --glow-1: rgba(43, 130, 255, 0.28);
-  --glow-2: rgba(191, 90, 242, 0.22);
-  --shadow-card: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px rgba(0,0,0,0.35);
-  --shadow-float: 0 8px 30px rgba(0,0,0,0.45), 0 2px 8px rgba(0,0,0,0.3);
+  --bg: #0A0B14;
+  --surface: #141628;
+  --surface-secondary: #1D2038;
+  --border: #2B2E4A;
+  --text: #F5F6FA;
+  --text-secondary: #9799B5;
+  --text-tertiary: #5C5F80;
+  --accent: #8C7BFF;
+  --accent-gradient: linear-gradient(135deg, #8C7BFF 0%, #4FDCF0 100%);
+  --hero-gradient: linear-gradient(135deg, #F5F6FA 0%, #B8AEFF 100%);
+  --icon-bg-gradient: linear-gradient(135deg, #241F45 0%, #17303A 100%);
+  --navbar-bg: rgba(20, 22, 40, 0.62);
+  --glow-1: rgba(140, 123, 255, 0.30);
+  --glow-2: rgba(79, 220, 240, 0.22);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 10px 28px rgba(0,0,0,0.4);
+  --shadow-float: 0 10px 34px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
 }
 
 * { box-sizing: border-box; }
+
+/* Мягкое появление карточек — ненавязчиво, коротко, не мешает пользоваться. */
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.card, .country-tile, .plan-card, .feature-card, .row {
+  animation: fade-up 0.35s ease both;
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+}
+.country-tile:active, .plan-card:active, .row:active { transform: scale(0.97); }
 html { scroll-behavior: smooth; }
 
 body {
@@ -101,7 +120,11 @@ a { color: inherit; text-decoration: none; }
   border-radius: 999px;
   box-shadow: var(--shadow-float);
 }
-.navbar .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.navbar .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+.brand-logo { width: 24px; height: 24px; object-fit: cover; border-radius: 7px; }
+.brand-logo-dark { display: none; }
+[data-theme="dark"] .brand-logo-light { display: none; }
+[data-theme="dark"] .brand-logo-dark { display: block; }
 .navbar .nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
 .navbar .nav-links a { color: var(--text-secondary); }
 .navbar .nav-links a:hover { color: var(--text); }
@@ -193,6 +216,101 @@ a { color: inherit; text-decoration: none; }
   border: none;
   color: var(--text);
   box-shadow: none;
+}
+.region-filter-btn { white-space: nowrap; flex-shrink: 0; padding: 8px 16px; font-size: 13px; }
+.region-filter-btn.active { background: var(--accent-gradient); color: #fff; }
+
+/* --- Карточки стран — цветные плитки с флагом вместо плоских строк --- */
+.country-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.country-tile {
+  position: relative;
+  border-radius: var(--radius-lg);
+  padding: 18px 16px;
+  overflow: hidden;
+  color: #fff;
+  min-height: 110px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-card);
+  background: linear-gradient(145deg, hsl(var(--hue), 70%, 46%) 0%, hsl(calc(var(--hue) + 40), 70%, 34%) 100%);
+}
+.country-tile::after {
+  content: "";
+  position: absolute;
+  top: -30%; right: -20%;
+  width: 140px; height: 140px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.14);
+}
+.country-tile .flag { font-size: 26px; line-height: 1; }
+.country-tile .name { font-size: 14px; font-weight: 700; margin-top: 10px; letter-spacing: -0.01em; }
+.country-tile .price { font-size: 12px; opacity: 0.88; margin-top: 2px; }
+.country-tile .fav-heart {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 16px; z-index: 2;
+  background: rgba(0,0,0,0.18);
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  border: none; color: #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* --- Карточки тарифов — с бейджами вместо строк --- */
+.plan-grid { display: grid; gap: 12px; }
+.plan-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: var(--shadow-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.plan-card .plan-main { display: flex; align-items: center; gap: 14px; }
+.plan-card .plan-icon {
+  width: 46px; height: 46px;
+  border-radius: 14px;
+  background: var(--icon-bg-gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+}
+.plan-card .plan-title { font-size: 15px; font-weight: 600; }
+.plan-card .plan-badges { display: flex; gap: 6px; margin-top: 4px; }
+.plan-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-secondary);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+.plan-card .plan-price { font-size: 17px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+
+.promo-strip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.promo-pill {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* --- Feature grid --- */
@@ -342,4 +460,6 @@ h2.section-title { font-size: 28px; font-weight: 800; text-align: center; margin
   .hero h1 { font-size: 32px; }
   .features, .steps { grid-template-columns: 1fr; }
   .section { padding: 40px 0; }
+  .country-grid { grid-template-columns: repeat(2, 1fr); }
+  .plan-card { flex-wrap: wrap; }
 }

@@ -13,6 +13,7 @@ smtplib, без сторонних библиотек — та же логика
 """
 import smtplib
 from email.mime.text import MIMEText
+from email.utils import formataddr
 
 from app.config import settings
 
@@ -23,7 +24,10 @@ def send_email(to: str, subject: str, body: str) -> bool:
 
     message = MIMEText(body, "plain", "utf-8")
     message["Subject"] = subject
-    message["From"] = settings.SMTP_FROM_EMAIL
+    # formataddr вместо простой f-строки — иначе если в SMTP_FROM_NAME окажется
+    # запятая или другой спецсимвол, письмо у части почтовых клиентов может
+    # сломаться или показать имя криво. formataddr сам всё правильно экранирует.
+    message["From"] = formataddr((settings.SMTP_FROM_NAME, settings.SMTP_FROM_EMAIL))
     message["To"] = to
 
     try:

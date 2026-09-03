@@ -24,7 +24,9 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.database.db import get_session
-from app.database.models import Order, OrderStatus, Payment, PaymentProvider, PaymentStatus, User
+from app.database.models import (
+    Order, OrderStatus, Payment, PaymentProvider, PaymentStatus, User, TopUp, WebsiteAccount,
+)
 from app.services.esimaccess import esimaccess_client
 from app.services.payments import idram
 from app.services.payments.wallet_pay import wallet_pay_client, WalletPayError
@@ -96,7 +98,40 @@ async def _fulfill_order(session, order: Order) -> None:
     await session.commit()
 
 
-class InitiatePaymentRequest(BaseModel):
+async def _credit_topup(session, top_up: TopUp) -> None:
+    """Подтверждённое пополнение — зачисляет деньги на баланс аккаунта."""
+    top_up.status = PaymentStatus.PAID
+    await session.commit()
+
+    account = await session.get(WebsiteAccount, top_up.website_account_id)
+    account.balance = round(account.balance + top_up.amount, 2)
+    await session.commit()
+
+
+REFERRAL_BONUS_PERCENT = 10  # % от суммы первого успешного заказа реферала — зачисляется рефереру на баланс
+
+
+async def maybe_credit_referral_bonus(session, order: Order) -> None:
+    """
+    Вызывается при переходе заказа в ACTIVE (см. app/webapp/webhooks.py).
+    Разово (per referral_bonus_paid) зачисляет рефереру бонус на баланс —
+    только если у заказа вообще есть привязанный аккаунт сайта, у него
+    указан пригласивший, и бонус за него ещё не выплачивался.
+    """
+    if order.website_account_id is None:
+        return
+    account = await session.get(WebsiteAccount, order.website_account_id)
+    if account is None or account.referred_by_id is None or account.referral_bonus_paid:
+        return
+
+    referrer = await session.get(WebsiteAccount, account.referred_by_id)
+    if referrer is None:
+        return
+
+    bonus = round(float(order.price_charged) * REFERRAL_BONUS_PERCENT / 100, 2)
+    referrer.balance = round(referrer.balance + bonus, 2)
+    account.referral_bonus_paid = True
+    await session.commit()
     method: str  # "idram" | "wallet_pay" | "oxapay"
 
 
@@ -225,35 +260,39 @@ async def payment_status(order_id: int, user: User = Depends(get_current_user)):
 
 @router.get("/pay/idram/{external_id}", response_class=HTMLResponse)
 async def idram_redirect_page(external_id: str):
-    """Открывается из Mini App (Telegram.WebApp.openLink) или с сайта — сама переносит на Idram."""
+    """Открывается из Mini App (Telegram.WebApp.openLink) или с сайта — сама переносит на Idram.
+    Работает и с заказами (Payment), и с пополнениями баланса (TopUp)."""
     async with get_session() as session:
-        result = await session.execute(
-            select(Payment).where(Payment.external_payment_id == external_id)
-        )
-        payment = result.scalar_one_or_none()
-        if payment is None:
-            raise HTTPException(status_code=404, detail="Платёж не найден")
+        payment = (
+            await session.execute(select(Payment).where(Payment.external_payment_id == external_id))
+        ).scalar_one_or_none()
 
-        result = await session.execute(select(Order).where(Order.id == payment.order_id))
-        order = result.scalar_one()
-
-    success_url = None
-    fail_url = None
-    if order.guest_token:  # заказ с сайта (не из Telegram) — вернуть на страницу заказа, а не в Telegram
-        success_url = f"{settings.PUBLIC_BASE_URL}/shop/order/{order.guest_token}"
-        fail_url = success_url
+        if payment is not None:
+            order = (await session.execute(select(Order).where(Order.id == payment.order_id))).scalar_one()
+            amount = payment.amount
+            description = f"Заказ №{order.id}"
+            success_url = fail_url = None
+            if order.guest_token:  # заказ с сайта (не из Telegram) — вернуть на страницу заказа, а не в Telegram
+                success_url = f"{settings.PUBLIC_BASE_URL}/shop/order/{order.guest_token}"
+                fail_url = success_url
+        else:
+            top_up = (
+                await session.execute(select(TopUp).where(TopUp.external_payment_id == external_id))
+            ).scalar_one_or_none()
+            if top_up is None:
+                raise HTTPException(status_code=404, detail="Платёж не найден")
+            amount = top_up.amount
+            description = "Пополнение баланса"
+            success_url = fail_url = f"{settings.PUBLIC_BASE_URL}/shop/account/balance"
 
     fields = idram.build_payment_form_fields(
-        bill_no=payment.external_payment_id,
-        amount=f"{float(payment.amount):.2f}",
-        description=f"Заказ №{order.id}",
+        bill_no=external_id,
+        amount=f"{float(amount):.2f}",
+        description=description,
         success_url=success_url,
         fail_url=fail_url,
     )
-    idram_logger.info(
-        "Redirect to Idram: order=%s bill_no=%s amount=%s",
-        order.id, payment.external_payment_id, fields["EDP_AMOUNT"],
-    )
+    idram_logger.info("Redirect to Idram: bill_no=%s amount=%s", external_id, fields["EDP_AMOUNT"])
     return idram.render_autosubmit_html(fields)
 
 
@@ -269,7 +308,7 @@ async def idram_fail_page():
 
 @router.post("/webhooks/idram", response_class=PlainTextResponse)
 async def idram_webhook(request: Request):
-    """RESULT_URL — сюда Idram шлёт precheck, а затем подтверждение платежа."""
+    """RESULT_URL — сюда Idram шлёт precheck, а затем подтверждение платежа (за заказ ИЛИ за пополнение баланса)."""
     form = dict(await request.form())
     bill_no = form.get("EDP_BILL_NO", "")
     idram_logger.info(
@@ -278,47 +317,45 @@ async def idram_webhook(request: Request):
     )
 
     async with get_session() as session:
-        result = await session.execute(
-            select(Payment).where(Payment.external_payment_id == bill_no)
-        )
-        payment = result.scalar_one_or_none()
+        payment = (
+            await session.execute(select(Payment).where(Payment.external_payment_id == bill_no))
+        ).scalar_one_or_none()
+        top_up = None
         if payment is None:
+            top_up = (
+                await session.execute(select(TopUp).where(TopUp.external_payment_id == bill_no))
+            ).scalar_one_or_none()
+
+        if payment is None and top_up is None:
             idram_logger.warning("Webhook: unknown bill_no=%s — ignoring (responding ERROR)", bill_no)
             return "ERROR"  # не наш EDP_BILL_NO
 
         if idram.is_precheck(form):
-            # EDP_REC_ACCOUNT сверяет сам Idram на своей стороне; нам достаточно
-            # подтвердить, что EDP_BILL_NO существует как наш ожидающий оплаты платёж.
-            idram_logger.info("Precheck OK: bill_no=%s order=%s", bill_no, payment.order_id)
+            idram_logger.info("Precheck OK: bill_no=%s", bill_no)
             return "OK"
 
         if not idram.verify_checksum(form):
             idram_logger.error(
-                "CHECKSUM MISMATCH: bill_no=%s order=%s — возможна попытка подделки "
-                "или расхождение в реквизитах, платёж НЕ подтверждён.",
-                bill_no, payment.order_id,
+                "CHECKSUM MISMATCH: bill_no=%s — возможна попытка подделки или расхождение "
+                "в реквизитах, платёж НЕ подтверждён.", bill_no,
             )
             return "ERROR"
 
-        payment.status = PaymentStatus.PAID
-        payment.provider_transaction_id = form.get("EDP_TRANS_ID")
-        payment.raw_callback = form
-        await session.commit()
+        if payment is not None:
+            payment.status = PaymentStatus.PAID
+            payment.provider_transaction_id = form.get("EDP_TRANS_ID")
+            payment.raw_callback = form
+            await session.commit()
 
-        order = await session.get(Order, payment.order_id)
-        order.status = OrderStatus.PAID
-        await session.commit()
+            order = await session.get(Order, payment.order_id)
+            order.status = OrderStatus.PAID
+            await session.commit()
 
-        idram_logger.info(
-            "Payment CONFIRMED: order=%s bill_no=%s amount=%s trans_id=%s payer=%s",
-            order.id, bill_no, form.get("EDP_AMOUNT"), form.get("EDP_TRANS_ID"), form.get("EDP_PAYER_ACCOUNT"),
-        )
-
-        await _fulfill_order(session, order)
-        idram_logger.info(
-            "Order fulfillment result: order=%s status=%s esimaccess_order_no=%s",
-            order.id, order.status.value, order.esimaccess_order_no,
-        )
+            idram_logger.info("Payment CONFIRMED: order=%s bill_no=%s", order.id, bill_no)
+            await _fulfill_order(session, order)
+        else:
+            await _credit_topup(session, top_up)
+            idram_logger.info("Top-up CONFIRMED: top_up=%s bill_no=%s", top_up.id, bill_no)
 
     return "OK"
 
@@ -344,22 +381,27 @@ async def oxapay_webhook(request: Request, hmac_header: str = Header(default="",
         return "OK"  # "Paying" и промежуточные статусы — просто подтверждаем приём
 
     async with get_session() as session:
-        result = await session.execute(
-            select(Payment).where(Payment.external_payment_id == payload.get("order_id", ""))
-        )
-        payment = result.scalar_one_or_none()
-        if payment is None:
-            return "OK"  # не наш order_id — молча подтверждаем, чтобы OxaPay не ретраил
+        payment = (
+            await session.execute(select(Payment).where(Payment.external_payment_id == payload.get("order_id", "")))
+        ).scalar_one_or_none()
 
-        payment.status = PaymentStatus.PAID
-        payment.provider_transaction_id = payload.get("track_id")
-        payment.raw_callback = payload
-        await session.commit()
+        if payment is not None:
+            payment.status = PaymentStatus.PAID
+            payment.provider_transaction_id = payload.get("track_id")
+            payment.raw_callback = payload
+            await session.commit()
 
-        order = await session.get(Order, payment.order_id)
-        order.status = OrderStatus.PAID
-        await session.commit()
+            order = await session.get(Order, payment.order_id)
+            order.status = OrderStatus.PAID
+            await session.commit()
 
-        await _fulfill_order(session, order)
+            await _fulfill_order(session, order)
+            return "OK"
+
+        top_up = (
+            await session.execute(select(TopUp).where(TopUp.external_payment_id == payload.get("order_id", "")))
+        ).scalar_one_or_none()
+        if top_up is not None:
+            await _credit_topup(session, top_up)
 
     return "OK"

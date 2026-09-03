@@ -7,6 +7,11 @@
     <h1>{{ t("hero_title") }}</h1>
     <p>{{ t("hero_subtitle") }}</p>
     <a class="btn" href="/shop/catalog">{{ t("hero_cta") }}</a>
+    <div class="promo-strip" style="justify-content:center; margin-top:28px;">
+      <div class="promo-pill">🌍 100+ {{ t("filter_all")|lower }}</div>
+      <div class="promo-pill">⚡ {{ t("feature_instant_title") }}</div>
+      <div class="promo-pill">💳 {{ t("feature_payment_title") }}</div>
+    </div>
   </div>
 </section>
 
@@ -54,16 +59,21 @@
 </section>
 
 <section class="section" style="border-top:1px solid var(--border);">
-  <div class="container narrow">
+  <div class="container">
     <h2 class="section-title">{{ t("catalog_title") }}</h2>
+    <div class="country-grid">
     {% for c in countries[:8] %}
-    <a class="row" href="/shop/country/{{ c.code }}">
-      <span class="name">{{ c.name }}</span>
-      <span class="meta">{{ c.code }} ›</span>
+    <a class="country-tile" href="/shop/country/{{ c.code }}" style="--hue: {{ c.code|hue }};">
+      <span class="flag">{{ c.code|flag }}</span>
+      <div>
+        <div class="name">{{ c.name }}</div>
+        <div class="price">{{ c.code }}</div>
+      </div>
     </a>
     {% else %}
     <p class="hint" style="text-align:center;">—</p>
     {% endfor %}
+    </div>
     {% if countries|length > 8 %}
     <p style="text-align:center; margin-top:16px;"><a class="btn secondary" href="/shop/catalog">{{ t("hero_cta") }}</a></p>
     {% endif %}

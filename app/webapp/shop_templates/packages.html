@@ -4,13 +4,42 @@
 <section class="section">
   <div class="container narrow">
     <p><a href="/shop/catalog" class="hint">{{ t("back_to_countries") }}</a></p>
-    <h2 class="section-title">{{ country_name }}</h2>
-    {% for p in packages %}
-    <a class="row" href="/shop/checkout/{{ p.id }}">
-      <span class="name">{{ p.title }}</span>
-      <span class="meta">{{ p.sell_price }} {{ p.currency }} ›</span>
-    </a>
-    {% endfor %}
+
+    <div class="country-tile" style="--hue: {{ country_code|hue }}; min-height:auto; padding:22px 20px; margin-bottom:18px;">
+      <span class="flag" style="font-size:36px;">{{ country_code|flag }}</span>
+      <div>
+        <div class="name" style="font-size:20px;">{{ country_name }}</div>
+        {% if review_count %}
+        <div class="price">★ {{ avg_rating }} · {{ review_count }} {{ t("reviews_count") }}</div>
+        {% else %}
+        <div class="price">{{ t("no_reviews_yet") }}</div>
+        {% endif %}
+      </div>
+      {% if account %}
+      <form method="post" action="/shop/favorites/toggle" style="position:absolute; top:14px; right:14px; z-index:2;">
+        <input type="hidden" name="country_code" value="{{ country_code }}">
+        <button class="fav-heart" type="submit">{{ "♥" if is_favorite else "♡" }}</button>
+      </form>
+      {% endif %}
+    </div>
+
+    <div class="plan-grid">
+      {% for p in packages %}
+      <a class="plan-card" href="/shop/checkout/{{ p.id }}">
+        <div class="plan-main">
+          <div class="plan-icon">📶</div>
+          <div>
+            <div class="plan-title">{{ p.title }}</div>
+            <div class="plan-badges">
+              <span class="plan-badge">{{ p.validity_days }} {{ t("days_short") }}</span>
+              {% if p.data_amount_mb %}<span class="plan-badge">{{ (p.data_amount_mb / 1024) | round(1) }} GB</span>{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="plan-price">{{ p.sell_price }} {{ p.currency }}</div>
+      </a>
+      {% endfor %}
+    </div>
   </div>
 </section>
 {% endblock %}

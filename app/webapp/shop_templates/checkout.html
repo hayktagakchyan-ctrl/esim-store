@@ -18,6 +18,11 @@
     <p class="hint" style="margin-bottom:16px;">{{ t("logged_in_as") }} <strong>{{ account.email }}</strong></p>
 
     <form method="post" action="/shop/checkout/{{ package.id }}">
+      {% if can_pay_from_balance %}
+      <button class="btn block" type="submit" name="method" value="balance" style="margin-bottom:10px;">{{ t("checkout_pay_balance") }} (${{ "%.2f"|format(balance) }})</button>
+      {% else %}
+      <p class="hint" style="margin-bottom:10px;">{{ t("checkout_balance_low") }} ${{ "%.2f"|format(balance) }} — <a href="/shop/account/balance">{{ t("nav_balance") }}</a></p>
+      {% endif %}
       <button class="btn block" type="submit" name="method" value="idram">{{ t("checkout_pay_idram") }}</button>
       {% if oxapay_enabled %}
       <button class="btn secondary block" type="submit" name="method" value="oxapay" style="margin-top:10px;">{{ t("checkout_pay_oxapay") }}</button>

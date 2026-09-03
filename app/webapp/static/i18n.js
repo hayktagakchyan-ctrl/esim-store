@@ -24,6 +24,11 @@ const I18N = {
   payment_waiting: { ru: "Ждём подтверждения оплаты…", hy: "Սպասում ենք վճարման հաստատմանը…", en: "Waiting for payment confirmation…" },
 
   my_esims_empty: { ru: "Пока нет купленных eSIM", hy: "Դեռ չկան գնված eSIM-ներ", en: "No eSIMs purchased yet" },
+  greeting_hello: { ru: "Привет", hy: "Բարև", en: "Hello" },
+  greeting_active_esims: { ru: "активных eSIM", hy: "ակտիվ eSIM", en: "active eSIMs" },
+  stat_data: { ru: "Данные", hy: "Տվյալներ", en: "Data" },
+  stat_validity: { ru: "Срок", hy: "Ժամկետ", en: "Validity" },
+  days_short: { ru: "дн.", hy: "օր", en: "days" },
   qr_manual_hint: { ru: "Не сканируется? Введи вручную в настройках телефона:", hy: "Չի սկանավորվում: Մուտքագրիր ձեռքով հեռախոսի կարգավորումներում.", en: "Can't scan? Enter this manually in your phone settings:" },
   status_pending_payment: { ru: "Ждёт оплаты", hy: "Սպասում է վճարման", en: "Awaiting payment" },
   status_paid: { ru: "Оплачен", hy: "Վճարված է", en: "Paid" },

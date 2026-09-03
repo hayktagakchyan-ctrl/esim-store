@@ -25,14 +25,14 @@ from sqlalchemy import select
 from app.config import settings
 from app.database.db import get_session
 from app.database.models import (
-    Category, Conversation, ConversationMessage, ConversationStatus, Order, OrderStatus,
-    Package, Payment, PaymentProvider, PaymentStatus, Product, WebsiteAccount,
+    Category, Conversation, ConversationMessage, ConversationStatus, Favorite, Order, OrderStatus,
+    Package, Payment, PaymentProvider, PaymentStatus, Product, Review, TopUp, WebsiteAccount,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.payments import idram
 from app.services.payments.oxapay import oxapay_client, OxaPayError
 from app.webapp.notify_bots import support_notify_bot
-from app.webapp.payments import _fulfill_order
+from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT
 from app.webapp.shop_auth import get_current_account, hash_password, verify_password
 from app.webapp.shop_email import send_email
 from app.webapp.shop_i18n import get_lang, t as translate
@@ -41,6 +41,31 @@ router = APIRouter()
 
 BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=BASE_DIR / "shop_templates")
+
+
+def _country_flag(code: str) -> str:
+    """
+    ISO-код страны → эмодзи-флаг. Никаких картинок — это просто два Unicode-символа
+    "regional indicator" (буква A = U+1F1E6, и так далее по алфавиту), которые
+    современные шрифты сами рисуют как флаг. Бесплатно, без вопросов лицензии,
+    в отличие от настоящих фотографий.
+    """
+    code = (code or "").strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return "🌐"
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code)
+
+
+def _country_hue(code: str) -> int:
+    """Стабильный (для одной и той же страны — всегда одинаковый) цветовой тон,
+    чтобы у карточек стран были разные, но воспроизводимые градиенты — в диапазоне
+    фирменной гаммы (голубой-синий-фиолетовый, между --accent-gradient концами),
+    а не по всему спектру, чтобы не выбиваться из премиальной палитры KaLine."""
+    return 190 + sum(ord(c) for c in (code or "")) * 37 % 100  # 190..290: cyan → blue → purple
+
+
+templates.env.filters["flag"] = _country_flag
+templates.env.filters["hue"] = _country_hue
 
 
 def _safe_next(next_url: str) -> str:
@@ -139,17 +164,34 @@ async def shop_catalog(request: Request):
 
 @router.get("/shop/country/{country_code}", response_class=HTMLResponse)
 async def shop_country(request: Request, country_code: str):
+    account = await get_current_account(request)
     async with get_session() as session:
         result = await session.execute(
             select(Package).where(Package.country_code == country_code, Package.is_active.is_(True))
         )
         packages = list(result.scalars())
 
+        reviews = list((
+            await session.execute(select(Review).where(Review.country_code == country_code))
+        ).scalars())
+        review_count = len(reviews)
+        avg_rating = round(sum(r.rating for r in reviews) / review_count, 1) if review_count else None
+
+        is_favorite = False
+        if account is not None:
+            fav = (
+                await session.execute(
+                    select(Favorite).where(Favorite.website_account_id == account.id, Favorite.country_code == country_code)
+                )
+            ).scalar_one_or_none()
+            is_favorite = fav is not None
+
     if not packages:
         raise HTTPException(status_code=404, detail="Пакеты для этой страны не найдены")
 
     return await render(
-        request, "packages.html", packages=packages, country_name=packages[0].country_name
+        request, "packages.html", packages=packages, country_name=packages[0].country_name,
+        country_code=country_code, avg_rating=avg_rating, review_count=review_count, is_favorite=is_favorite,
     )
 
 
@@ -163,11 +205,14 @@ async def shop_checkout_form(request: Request, package_id: int):
         package = await session.get(Package, package_id)
         if package is None:
             raise HTTPException(status_code=404, detail="Пакет не найден")
+        db_account = await session.get(WebsiteAccount, account.id)
 
     return await render(
         request, "checkout.html", package=package, error=None,
         test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
         oxapay_enabled=settings.ENABLE_OXAPAY,
+        balance=db_account.balance,
+        can_pay_from_balance=float(db_account.balance) >= float(package.sell_price),
     )
 
 
@@ -177,7 +222,7 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
     if account is None:
         return require_login_redirect(request)
 
-    if method not in ("idram", "oxapay", "test"):
+    if method not in ("idram", "oxapay", "test", "balance"):
         raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
     if method == "test" and not settings.ENABLE_TEST_PAYMENT:
         # Проверка и на сервере, не только скрытая кнопка в интерфейсе — на случай
@@ -190,6 +235,17 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
         package = await session.get(Package, package_id)
         if package is None:
             raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        if method == "balance":
+            db_account = await session.get(WebsiteAccount, account.id)
+            if db_account.balance < float(package.sell_price):
+                return await render(
+                    request, "checkout.html", package=package,
+                    error="На балансе недостаточно средств — пополни его в «Мой баланс».",
+                    test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
+                    oxapay_enabled=settings.ENABLE_OXAPAY, balance=db_account.balance,
+                    can_pay_from_balance=False,
+                )
 
         order = Order(
             user_id=None,
@@ -210,6 +266,7 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
             "idram": PaymentProvider.IDRAM,
             "oxapay": PaymentProvider.OXAPAY,
             "test": PaymentProvider.TEST,
+            "balance": PaymentProvider.BALANCE,
         }[method]
         payment = Payment(
             order_id=order.id,
@@ -235,17 +292,28 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
                     return_url=f"{settings.PUBLIC_BASE_URL}/shop/order/{order.guest_token}",
                 )
             except OxaPayError as exc:
+                current_balance = (await session.get(WebsiteAccount, account.id)).balance
                 return await render(
                     request, "checkout.html", package=package,
                     error=f"Платёжная система временно недоступна: {exc}",
                     test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
-                    oxapay_enabled=settings.ENABLE_OXAPAY,
+                    oxapay_enabled=settings.ENABLE_OXAPAY, balance=current_balance,
+                    can_pay_from_balance=float(current_balance) >= float(package.sell_price),
                 )
             payment.provider_order_id = invoice["track_id"]
             payment.pay_link = invoice["payment_url"]
             session.add(payment)
             await session.commit()
             redirect_url = invoice["payment_url"]
+        elif method == "balance":
+            db_account = await session.get(WebsiteAccount, account.id)
+            db_account.balance = round(db_account.balance - float(order.price_charged), 2)
+            payment.status = PaymentStatus.PAID
+            session.add(payment)
+            order.status = OrderStatus.PAID
+            await session.commit()
+            await _fulfill_order(session, order)
+            redirect_url = f"/shop/order/{order.guest_token}"
         else:  # test — уже проверили выше, что settings.ENABLE_TEST_PAYMENT включён
             payment.status = PaymentStatus.PAID
             session.add(payment)
@@ -276,9 +344,17 @@ async def shop_order_status(request: Request, guest_token: str):
 
     still_waiting = order.status in (OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.PROVISIONING)
 
+    existing_review = None
+    if order.status == OrderStatus.ACTIVE:
+        async with get_session() as session:
+            existing_review = (
+                await session.execute(select(Review).where(Review.order_id == order.id))
+            ).scalar_one_or_none()
+
     return await render(
         request, "order_status.html",
         order=order, status_key=STATUS_KEYS[order.status], still_waiting=still_waiting,
+        existing_review=existing_review,
     )
 
 
@@ -498,8 +574,8 @@ async def _send_verification_email(session, account: WebsiteAccount) -> None:
 
 
 @router.get("/shop/register", response_class=HTMLResponse)
-async def register_form(request: Request, next: str = "/shop/"):
-    return await render(request, "register.html", error=None, next=next)
+async def register_form(request: Request, next: str = "/shop/", ref: str = ""):
+    return await render(request, "register.html", error=None, next=next, ref=ref)
 
 
 @router.post("/shop/register", response_class=HTMLResponse)
@@ -510,23 +586,37 @@ async def register_submit(
     password_confirm: str = Form(...),
     next: str = Form("/shop/"),
     agree: bool = Form(False),
+    ref: str = Form(""),
 ):
     email = email.strip().lower()
     if not agree:
-        return await render(request, "register.html", error="Нужно согласиться с условиями использования.", next=next)
+        return await render(request, "register.html", error="Нужно согласиться с условиями использования.", next=next, ref=ref)
     if "@" not in email or "." not in email:
-        return await render(request, "register.html", error="Введите настоящий email.", next=next)
+        return await render(request, "register.html", error="Введите настоящий email.", next=next, ref=ref)
     if len(password) < 8:
-        return await render(request, "register.html", error="Пароль должен быть не короче 8 символов.", next=next)
+        return await render(request, "register.html", error="Пароль должен быть не короче 8 символов.", next=next, ref=ref)
     if password != password_confirm:
-        return await render(request, "register.html", error="Пароли не совпадают.", next=next)
+        return await render(request, "register.html", error="Пароли не совпадают.", next=next, ref=ref)
 
     async with get_session() as session:
         existing = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
         if existing is not None:
-            return await render(request, "register.html", error="Аккаунт с таким email уже существует.", next=next)
+            return await render(request, "register.html", error="Аккаунт с таким email уже существует.", next=next, ref=ref)
 
-        account = WebsiteAccount(email=email, password_hash=hash_password(password))
+        referred_by_id = None
+        if ref:
+            referrer = (
+                await session.execute(select(WebsiteAccount).where(WebsiteAccount.referral_code == ref))
+            ).scalar_one_or_none()
+            if referrer is not None:
+                referred_by_id = referrer.id
+
+        account = WebsiteAccount(
+            email=email,
+            password_hash=hash_password(password),
+            referral_code=secrets.token_urlsafe(6),
+            referred_by_id=referred_by_id,
+        )
         session.add(account)
         await session.commit()
         await session.refresh(account)
@@ -749,3 +839,151 @@ async def account_settings_submit(
         await session.commit()
 
     return await render(request, "account_settings.html", error=None, success=True)
+
+
+# --- Баланс, пополнение, реферальная программа ---
+
+@router.get("/shop/account/balance", response_class=HTMLResponse)
+async def account_balance(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        top_ups = list((
+            await session.execute(
+                select(TopUp).where(TopUp.website_account_id == account.id).order_by(TopUp.created_at.desc()).limit(20)
+            )
+        ).scalars())
+
+    referral_link = f"{settings.PUBLIC_BASE_URL}/shop/register?ref={db_account.referral_code}"
+    return await render(
+        request, "account_balance.html",
+        balance=db_account.balance, top_ups=top_ups, referral_link=referral_link,
+        referral_percent=REFERRAL_BONUS_PERCENT, error=None,
+    )
+
+
+@router.post("/shop/account/balance/topup", response_class=HTMLResponse)
+async def account_balance_topup(request: Request, amount: str = Form(...), method: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    try:
+        amount_value = round(float(amount), 2)
+    except ValueError:
+        amount_value = 0
+    if amount_value < 1:
+        return await render(
+            request, "account_balance.html", balance=account.balance, top_ups=[],
+            referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+            referral_percent=REFERRAL_BONUS_PERCENT, error="Минимальная сумма пополнения — $1.",
+        )
+    if method not in ("idram", "oxapay"):
+        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
+    if method == "oxapay" and not settings.ENABLE_OXAPAY:
+        raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+
+    external_id = str(uuid.uuid4())
+    async with get_session() as session:
+        top_up = TopUp(
+            website_account_id=account.id, amount=amount_value, currency="USD",
+            provider=PaymentProvider.IDRAM if method == "idram" else PaymentProvider.OXAPAY,
+            status=PaymentStatus.PENDING, external_payment_id=external_id,
+        )
+
+        if method == "idram":
+            session.add(top_up)
+            await session.commit()
+            redirect_url = f"/pay/idram/{external_id}"
+        else:
+            try:
+                invoice = await oxapay_client.create_invoice(
+                    amount=amount_value, currency="USD", order_id=external_id,
+                    description="Пополнение баланса",
+                    callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
+                    return_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance",
+                )
+            except OxaPayError as exc:
+                return await render(
+                    request, "account_balance.html", balance=account.balance, top_ups=[],
+                    referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+                    referral_percent=REFERRAL_BONUS_PERCENT,
+                    error=f"Платёжная система временно недоступна: {exc}",
+                )
+            top_up.provider_order_id = invoice["track_id"]
+            top_up.pay_link = invoice["payment_url"]
+            session.add(top_up)
+            await session.commit()
+            redirect_url = invoice["payment_url"]
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+# --- Избранное ---
+
+@router.post("/shop/favorites/toggle")
+async def toggle_favorite(request: Request, country_code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        existing = (
+            await session.execute(
+                select(Favorite).where(Favorite.website_account_id == account.id, Favorite.country_code == country_code)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            await session.delete(existing)
+        else:
+            session.add(Favorite(website_account_id=account.id, country_code=country_code))
+        await session.commit()
+
+    referer = request.headers.get("referer", "/shop/catalog")
+    return RedirectResponse(url=referer, status_code=302)
+
+
+# --- Отзывы ---
+
+@router.post("/shop/order/{guest_token}/review")
+async def submit_review(request: Request, guest_token: str, rating: int = Form(...), comment: str = Form("")):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
+
+    async with get_session() as session:
+        order = (await session.execute(select(Order).where(Order.guest_token == guest_token))).scalar_one_or_none()
+        if order is None or order.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        if order.status != OrderStatus.ACTIVE:
+            raise HTTPException(status_code=400, detail="Отзыв можно оставить только на активированный eSIM")
+
+        existing = (await session.execute(select(Review).where(Review.order_id == order.id))).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=400, detail="Отзыв на этот заказ уже оставлен")
+
+        await session.refresh(order, attribute_names=["package"])
+        session.add(Review(
+            website_account_id=account.id, order_id=order.id,
+            country_code=order.package.country_code, rating=rating, comment=comment.strip() or None,
+        ))
+        await session.commit()
+
+    return RedirectResponse(url=f"/shop/order/{guest_token}", status_code=302)
+
+
+@router.get("/shop/api/favorites")
+async def api_favorites(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return {"codes": []}
+    async with get_session() as session:
+        favs = list((
+            await session.execute(select(Favorite.country_code).where(Favorite.website_account_id == account.id))
+        ).scalars())
+    return {"codes": favs}

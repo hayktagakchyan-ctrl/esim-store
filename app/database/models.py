@@ -7,7 +7,7 @@ from datetime import datetime
 import enum
 
 from sqlalchemy import (
-    BigInteger, String, Integer, Numeric, DateTime, ForeignKey, Text, Enum, JSON, Boolean
+    BigInteger, String, Integer, Numeric, DateTime, ForeignKey, Text, Enum, JSON, Boolean, UniqueConstraint
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -124,6 +124,7 @@ class PaymentProvider(str, enum.Enum):
     WALLET_PAY = "wallet_pay"   # Telegram Wallet — покрывает и "крипту", и "Telegram-кошелёк" одним провайдером
     OXAPAY = "oxapay"           # крипта с ЛЮБОГО адреса/биржи, без привязки к Telegram-аккаунту
     TEST = "test"               # только для проверки — см. settings.ENABLE_TEST_PAYMENT
+    BALANCE = "balance"         # оплата с внутреннего баланса сайта (см. WebsiteAccount.balance)
 
 
 class PaymentStatus(str, enum.Enum):
@@ -323,3 +324,59 @@ class WebsiteAccount(Base):
     is_verified: Mapped[bool] = mapped_column(Boolean, default=False)
     verification_token: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     verification_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Баланс — пополняется через Idram/OxaPay (см. TopUp ниже), тратится на
+    # оформление заказов как альтернатива прямой оплате за конкретный заказ.
+    # Храним в той же валюте, что и заказы — USD.
+    balance: Mapped[float] = mapped_column(default=0.0)
+
+    # Реферальная программа — свой код (для ссылки-приглашения) и то, кто
+    # пригласил ЭТОГО пользователя (если он сам пришёл по чужой ссылке).
+    referral_code: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    referred_by_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), nullable=True)
+    referral_bonus_paid: Mapped[bool] = mapped_column(default=False)  # чтобы начислить рефереру только один раз
+
+
+class TopUp(Base):
+    """Пополнение баланса — та же логика провайдеров (Idram/OxaPay), что и у Payment для заказов."""
+    __tablename__ = "top_ups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    amount: Mapped[float] = mapped_column()
+    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    provider: Mapped[PaymentProvider] = mapped_column(Enum(PaymentProvider))
+    status: Mapped[PaymentStatus] = mapped_column(Enum(PaymentStatus), default=PaymentStatus.PENDING)
+    external_payment_id: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    provider_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    pay_link: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Review(Base):
+    """
+    Отзыв на страну — оставить может только тот, у кого есть РЕАЛЬНЫЙ заказ
+    в статусе ACTIVE по этой стране (проверяется в app/webapp/shop.py при
+    создании отзыва) — значит, эти цифры не накручены, растут только от
+    настоящих покупателей.
+    """
+    __tablename__ = "reviews"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), unique=True)  # один отзыв на один заказ
+    country_code: Mapped[str] = mapped_column(String(8), index=True)
+    rating: Mapped[int] = mapped_column()  # 1..5
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Favorite(Base):
+    """Избранные страны — просто список кодов стран на аккаунт."""
+    __tablename__ = "favorites"
+    __table_args__ = (UniqueConstraint("website_account_id", "country_code", name="uq_favorite_account_country"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    website_account_id: Mapped[int] = mapped_column(ForeignKey("website_accounts.id"), index=True)
+    country_code: Mapped[str] = mapped_column(String(8))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

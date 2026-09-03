@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}{{ t("nav_balance") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("nav_balance") }}</h2>
+
+    <div class="card" style="text-align:center;">
+      <div class="hint">{{ t("balance_current") }}</div>
+      <div style="font-size:36px; font-weight:800; margin:6px 0;">${{ "%.2f"|format(balance) }}</div>
+    </div>
+
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("balance_topup_title") }}</h3>
+      <form method="post" action="/shop/account/balance/topup">
+        <div class="field">
+          <label for="amount">{{ t("balance_amount_label") }}</label>
+          <input type="text" id="amount" name="amount" placeholder="10" required>
+        </div>
+        <button class="btn block" type="submit" name="method" value="idram" style="margin-bottom:10px;">{{ t("checkout_pay_idram") }}</button>
+        <button class="btn secondary block" type="submit" name="method" value="oxapay">{{ t("checkout_pay_oxapay") }}</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("referral_title") }}</h3>
+      <p class="hint">{{ t("referral_desc").format(percent=referral_percent) }}</p>
+      <input type="text" value="{{ referral_link }}" readonly onclick="this.select()" style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text); font-size:13px;">
+    </div>
+
+    {% if top_ups %}
+    <h3>{{ t("balance_history_title") }}</h3>
+    {% for t_up in top_ups %}
+    <div class="row">
+      <span class="name">${{ "%.2f"|format(t_up.amount) }} — {{ t_up.provider.value }}</span>
+      <span class="meta">{{ t_up.status.value }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

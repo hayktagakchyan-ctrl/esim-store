@@ -35,6 +35,32 @@
     <p class="hint" style="text-align:center;">…</p>
     {% endif %}
 
+    {% if order.status.value == "active" %}
+    <div class="card">
+      {% if existing_review %}
+        <p><strong>{{ t("review_thanks") }}</strong></p>
+        <p class="hint">{{ "★" * existing_review.rating }}{% if existing_review.comment %} — {{ existing_review.comment }}{% endif %}</p>
+      {% else %}
+        <h3 style="margin-top:0;">{{ t("review_title") }}</h3>
+        <form method="post" action="/shop/order/{{ order.guest_token }}/review">
+          <div class="field">
+            <select name="rating" required style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
+              <option value="5">★★★★★</option>
+              <option value="4">★★★★</option>
+              <option value="3">★★★</option>
+              <option value="2">★★</option>
+              <option value="1">★</option>
+            </select>
+          </div>
+          <div class="field">
+            <input type="text" name="comment" placeholder="{{ t('review_placeholder') }}" style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
+          </div>
+          <button class="btn block" type="submit">{{ t("review_submit") }}</button>
+        </form>
+      {% endif %}
+    </div>
+    {% endif %}
+
     <p class="hint" style="margin-top:20px;">{{ t("checkout_hint") }}</p>
   </div>
 </section>

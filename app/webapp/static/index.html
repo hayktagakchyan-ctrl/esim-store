@@ -3,9 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>eSIM Store</title>
+  <title>KaLine</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/style.css?v=10">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css?v=11">
 </head>
 <body>
   <div id="app">
@@ -60,10 +63,10 @@
 
       <div class="why-us-card">
         <h3 class="section-heading" data-i18n="home_why_title"></h3>
-        <div class="why-row"><span class="why-icon">⚡</span><span data-i18n="why_instant"></span></div>
-        <div class="why-row"><span class="why-icon">🛡️</span><span data-i18n="why_secure"></span></div>
-        <div class="why-row"><span class="why-icon">✈️</span><span data-i18n="why_no_roaming"></span></div>
-        <div class="why-row"><span class="why-icon">💬</span><span data-i18n="why_support"></span></div>
+        <div class="why-row"><span class="row-icon qa-purple">⚡</span><span data-i18n="why_instant"></span></div>
+        <div class="why-row"><span class="row-icon qa-blue">🛡️</span><span data-i18n="why_secure"></span></div>
+        <div class="why-row"><span class="row-icon qa-orange">✈️</span><span data-i18n="why_no_roaming"></span></div>
+        <div class="why-row"><span class="row-icon qa-green">💬</span><span data-i18n="why_support"></span></div>
       </div>
     </main>
 
@@ -112,28 +115,28 @@
 
       <div class="list">
         <button class="row profile-row" id="profile-balance-row">
-          <span class="flag">💳</span>
+          <span class="row-icon qa-green">💳</span>
           <div class="main"><div class="title" data-i18n="nav_balance"></div></div>
           <span class="meta" id="profile-balance-value">$0.00</span>
           <span class="chevron">›</span>
         </button>
         <button class="row profile-row" id="profile-referral-row">
-          <span class="flag">🎁</span>
+          <span class="row-icon qa-purple">🎁</span>
           <div class="main"><div class="title" data-i18n="referral_title"></div></div>
           <span class="chevron">›</span>
         </button>
         <button class="row profile-row" id="profile-favorites-row">
-          <span class="flag">♡</span>
+          <span class="row-icon qa-orange">♡</span>
           <div class="main"><div class="title" data-i18n="quick_favorites"></div></div>
           <span class="chevron">›</span>
         </button>
         <button class="row profile-row" id="profile-help-row">
-          <span class="flag">🆘</span>
+          <span class="row-icon qa-blue">🆘</span>
           <div class="main"><div class="title" data-i18n="profile_help"></div></div>
           <span class="chevron">›</span>
         </button>
         <div class="row profile-row">
-          <span class="flag">🌐</span>
+          <span class="row-icon qa-purple">🌐</span>
           <div class="main"><div class="title" data-i18n="profile_language"></div></div>
           <span class="meta" id="profile-lang-value"></span>
         </div>
@@ -229,6 +232,6 @@
        полного перезапуска приложения; при каждом обновлении app.js/i18n.js/style.css
        увеличивай это число — иначе клиент может продолжать использовать старую версию. -->
   <script src="/i18n.js?v=6"></script>
-  <script src="/app.js?v=6"></script>
+  <script src="/app.js?v=7"></script>
 </body>
 </html>

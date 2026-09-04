@@ -93,7 +93,7 @@ function showScreen(name) {
   document.getElementById("back-btn").hidden = isTabRoot;
 
   const titles = {
-    home: "eSIM Store",
+    home: "KaLine",
     "esim-countries": t("tab_browse"),
     "esim-packages": selectedCountry ? selectedCountry.name : "",
     "esim-checkout": t("checkout_title"),
@@ -105,7 +105,13 @@ function showScreen(name) {
     chats: t("tab_chats"),
     chat: "",
   };
-  document.getElementById("header-title").textContent = titles[name] || "eSIM Store";
+  document.getElementById("header-title").textContent = titles[name] || "KaLine";
+
+  // Переключатель языка и темы — только на главном экране. На внутренних экранах
+  // (особенно там, где заголовок длиннее, вроде "Мой баланс") они просто не влезали
+  // и заголовок переносился на 2 строки. Язык/тема и так доступны через профиль/главную.
+  document.querySelector(".lang-switch").hidden = name !== "home";
+  document.getElementById("theme-toggle").hidden = name !== "home";
 
   const activeTab = isTabRoot ? TAB_ROOTS[name] :
     ["esim-packages", "esim-checkout", "products"].includes(name) ? "browse" :
@@ -477,8 +483,14 @@ async function loadNotifications(type) {
   document.querySelectorAll(".notif-filter-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.type === type);
   });
-  const data = await api(`/api/notifications?type=${type}`);
   const list = document.getElementById("notifications-list");
+  let data;
+  try {
+    data = await api(`/api/notifications?type=${type}`);
+  } catch (e) {
+    list.innerHTML = `<div class="empty">${t("notif_empty")}</div>`;
+    return;
+  }
   list.innerHTML = "";
   if (data.items.length === 0) {
     list.innerHTML = `<div class="empty">${t("notif_empty")}</div>`;

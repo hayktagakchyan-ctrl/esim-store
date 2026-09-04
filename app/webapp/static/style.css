@@ -87,7 +87,7 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
   -webkit-font-smoothing: antialiased;
   position: relative;
   overflow-x: hidden;
@@ -197,7 +197,11 @@ body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
   font-size: 19px;
   color: var(--accent);
   cursor: pointer;
-  padding: 4px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* --- Экраны: отступ снизу, чтобы контент не прятался под плавающим таб-баром --- */
@@ -476,6 +480,16 @@ main.screen[hidden] { display: none !important; }
 .why-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 14px; }
 .why-icon { font-size: 18px; width: 28px; text-align: center; }
 
+/* --- Маленькая версия градиентной иконки — для строк списка (профиль, "почему мы") --- */
+.row-icon {
+  width: 34px; height: 34px;
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
 /* --- Экран профиля --- */
 .profile-header { display: flex; flex-direction: column; align-items: center; padding: 16px 0 20px; }
 .profile-avatar {
@@ -485,20 +499,21 @@ main.screen[hidden] { display: none !important; }
   font-size: 26px; font-weight: 700; margin-bottom: 10px;
 }
 .profile-name { font-size: 17px; font-weight: 700; }
-.profile-row { width: 100%; text-align: left; border: none; background: var(--surface); font-family: inherit; }
+.profile-row { width: 100%; text-align: left; border: none; background: var(--surface); font-family: inherit; color: var(--text); }
+.profile-row .title { color: var(--text); }
 .referral-promo-card { background: var(--surface); border-radius: var(--radius-lg); padding: 16px; margin-top: 16px; box-shadow: var(--shadow-card); }
 
 /* --- Плавающая кнопка чата (вместо отдельной вкладки) --- */
 .floating-chat-btn {
   position: fixed;
-  right: 16px;
-  bottom: 92px;
-  width: 52px; height: 52px;
+  right: 20px;
+  bottom: 118px;
+  width: 48px; height: 48px;
   border-radius: 50%;
   background: var(--accent-gradient);
   color: #fff;
   border: none;
-  font-size: 22px;
+  font-size: 20px;
   box-shadow: var(--shadow-float);
   z-index: 50;
 }
@@ -508,7 +523,7 @@ main.screen[hidden] { display: none !important; }
 .icon-btn { position: relative; }
 .notif-badge {
   position: absolute;
-  top: 2px; right: 2px;
+  top: 0px; right: 0px;
   min-width: 15px; height: 15px;
   border-radius: 999px;
   background: var(--danger);
@@ -517,6 +532,7 @@ main.screen[hidden] { display: none !important; }
   font-weight: 700;
   display: flex; align-items: center; justify-content: center;
   padding: 0 3px;
+  border: 2px solid var(--bg);
 }
 
 /* --- Шапка чекаута: крупная цена + флаг, как ценник акции в референсе --- */

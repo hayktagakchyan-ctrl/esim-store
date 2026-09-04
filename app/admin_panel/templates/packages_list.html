@@ -15,15 +15,22 @@
 
 <div class="container">
   <h2>Пакеты каталога</h2>
+  {% if imported is not none %}
+  <div class="card" style="border-color: var(--accent-green, #2ecc71);">
+    ✅ Импорт завершён: добавлено {{ imported }}, обновлено {{ updated }} пакетов.
+  </div>
+  {% endif %}
   <p class="status-label" style="margin-bottom:16px;">
-    Пока список пакетов esimaccess ("Query All Data Packages") не подтверждён их
-    документацией, эти строки нужно вносить вручную — код пакета и цену можно
-    посмотреть в личном кабинете esimaccess.
+    Кнопка «⚡ Импортировать ВЕСЬ каталог разом» заводит все пакеты из снимка
+    каталога esimaccess одним нажатием (3046 тарифов, 234 страны/региона).
+    Снимок сделан вручную через официальный MCP-сервер esimaccess — если их
+    каталог поменяется, снимок нужно будет пересобрать заново.
   </p>
 
   <p>
     <a class="btn" href="/packages/new">+ Добавить пакет</a>
     <a class="btn secondary" href="/packages/import">⬇️ Импорт из esimaccess</a>
+    <a class="btn" href="/packages/bulk-import">⚡ Импортировать ВЕСЬ каталог разом</a>
   </p>
   <p class="status-label" style="margin-bottom:16px;">
     Кнопка «🧪 Тест» у пакета создаёт тестовый заказ, сразу помеченный оплаченным,

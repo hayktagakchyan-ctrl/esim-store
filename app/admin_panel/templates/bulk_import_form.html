@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Массовый импорт — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages" class="active">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>⚡ Импортировать весь каталог разом</h2>
+
+  <div class="card">
+    <p>В снимке каталога:</p>
+    <ul>
+      <li><strong>{{ total_packages }}</strong> тарифов всего</li>
+      <li><strong>{{ country_count }}</strong> отдельных стран</li>
+      <li><strong>{{ region_count }}</strong> региональных пакетов (Европа, Азия и т.д.)</li>
+    </ul>
+    <p class="status-label">
+      Уже существующие пакеты (по коду esimaccess) будут обновлены новой ценой,
+      а не задублированы. Цена клиенту = закупочная цена esimaccess × (1 + наценка/100).
+    </p>
+
+    <form method="post" action="/packages/bulk-import">
+      <div class="field">
+        <div class="label">Наценка, %</div>
+        <input type="text" name="markup_percent" value="{{ default_markup }}" required>
+      </div>
+      <button class="btn" type="submit" onclick="return confirm('Импортировать все {{ total_packages }} тарифов? Это может занять минуту.');">
+        Импортировать всё
+      </button>
+      <a class="btn secondary" href="/packages">Отмена</a>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -7,6 +7,7 @@
 """
 from pathlib import Path
 from datetime import datetime
+import json
 
 from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
@@ -256,13 +257,14 @@ async def create_test_order(package_id: int = Form(...), _=Depends(require_login
 
 
 @app.get("/packages", response_class=HTMLResponse)
-async def packages_list(request: Request, _=Depends(require_login)):
+async def packages_list(request: Request, imported: int | None = None, updated: int | None = None, _=Depends(require_login)):
     async with get_session() as session:
         result = await session.execute(select(Package).order_by(Package.country_name, Package.title))
         packages = list(result.scalars())
 
     return templates.TemplateResponse(
-        "packages_list.html", {"request": request, "packages": packages}
+        "packages_list.html",
+        {"request": request, "packages": packages, "imported": imported, "updated": updated},
     )
 
 
@@ -755,3 +757,86 @@ async def promo_code_toggle(promo_id: int, _=Depends(require_login)):
             promo.is_active = not promo.is_active
             await session.commit()
     return RedirectResponse(url="/promo-codes", status_code=302)
+
+
+# --- Массовый импорт всего каталога esimaccess разом ---
+# Снимок каталога (esimaccess_catalog_snapshot.json) сделан вручную через официальный
+# eSIMAccess MCP-сервер (get_all_data_packages без фильтра) — актуален на дату снятия.
+# Это НЕ живой запрос к их API — если каталог у них обновится, снимок нужно будет
+# пересобрать заново. Зато не зависит от того, правильно ли угадан путь эндпоинта
+# в app/services/esimaccess.py (он никогда не был подтверждён документацией).
+
+CATALOG_SNAPSHOT_PATH = Path(__file__).parent / "esimaccess_catalog_snapshot.json"
+
+
+@app.get("/packages/bulk-import", response_class=HTMLResponse)
+async def bulk_import_form(request: Request, _=Depends(require_login)):
+    with open(CATALOG_SNAPSHOT_PATH, encoding="utf-8") as f:
+        catalog = json.load(f)
+    countries = sorted(set(p["country_code"] for p in catalog if not p["is_regional"]))
+    regions = sorted(set(p["country_code"] for p in catalog if p["is_regional"]))
+    return templates.TemplateResponse(
+        "bulk_import_form.html",
+        {
+            "request": request,
+            "total_packages": len(catalog),
+            "country_count": len(countries),
+            "region_count": len(regions),
+            "default_markup": settings.ESIMACCESS_DEFAULT_MARKUP_PERCENT,
+        },
+    )
+
+
+@app.post("/packages/bulk-import")
+async def bulk_import_submit(
+    request: Request,
+    markup_percent: float = Form(...),
+    _=Depends(require_login),
+):
+    with open(CATALOG_SNAPSHOT_PATH, encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    created = 0
+    updated = 0
+    async with get_session() as session:
+        # Заранее загружаем существующие коды пакетов одним запросом — быстрее, чем
+        # проверять каждый по отдельности при 3000+ записях.
+        existing = {
+            p.esimaccess_package_code: p
+            for p in (await session.execute(select(Package))).scalars()
+        }
+
+        for item in catalog:
+            cost_price = item["price_usd"]
+            sell_price = round(cost_price * (1 + markup_percent / 100), 2)
+            code = item["package_code"]
+
+            if code in existing:
+                pkg = existing[code]
+                pkg.cost_price = cost_price
+                pkg.sell_price = sell_price
+                pkg.data_amount_mb = item["data_amount_mb"]
+                pkg.validity_days = item["validity_days"]
+                pkg.country_code = item["country_code"]
+                pkg.country_name = item["country_name"]
+                pkg.is_regional = item["is_regional"]
+                updated += 1
+            else:
+                session.add(Package(
+                    esimaccess_package_code=code,
+                    country_code=item["country_code"],
+                    country_name=item["country_name"],
+                    title=f"{item['data_amount_mb'] / 1024:.1f} ГБ / {item['validity_days']} дн.".replace(".0 ", " "),
+                    data_amount_mb=item["data_amount_mb"],
+                    validity_days=item["validity_days"],
+                    cost_price=cost_price,
+                    sell_price=sell_price,
+                    currency="USD",
+                    is_active=True,
+                    is_regional=item["is_regional"],
+                ))
+                created += 1
+
+        await session.commit()
+
+    return RedirectResponse(url=f"/packages?imported={created}&updated={updated}", status_code=302)

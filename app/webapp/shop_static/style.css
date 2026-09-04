@@ -1,18 +1,22 @@
 /* ============================================================
-   Apple / iOS-style — системный шрифтовой стек (-apple-system → SF Pro
-   на устройствах Apple), мягкие микро-градиенты, "стеклянная" плавающая
-   навигация. Тема переключается атрибутом data-theme на <html> (см.
-   app/webapp/shop_static/theme.js) — по умолчанию берётся системная
-   тема устройства, но человек может переключить вручную ползунком в
-   шапке, выбор запоминается (localStorage).
+   Apple / iOS-style design — SF Pro (через системный стек шрифтов
+   -apple-system, который на устройствах Apple САМ рендерится как
+   SF Pro — отдельно грузить шрифт не нужно и нельзя, он лицензионно
+   закрыт), мягкие микро-градиенты, плавающий таб-бар.
+
+   Светлая и тёмная тема — переключается автоматически по теме
+   Telegram (colorScheme), см. applyTheme() в app.js.
    ============================================================ */
 
 /* ============================================================
-   KaLine — Apple/iOS-style, фирменная палитра: глубокий navy, насыщенный
-   purple, мягкий cyan-акцент (под цвет логотипа), системный шрифтовой
-   стек (-apple-system → SF Pro на устройствах Apple). Тема переключается
-   атрибутом data-theme на <html> (см. app/webapp/shop_static/theme.js) —
-   по умолчанию системная тема устройства, либо вручную ползунком в шапке.
+   KaLine — Apple/iOS-style, но со своей фирменной палитрой: глубокий
+   navy, насыщенный purple, мягкий cyan-акцент (не голубой iOS systemBlue,
+   как раньше) — под цвет логотипа. SF Pro через системный стек шрифтов
+   -apple-system (на устройствах Apple САМ рендерится как SF Pro — грузить
+   отдельно не нужно и нельзя, шрифт лицензионно закрыт).
+
+   Светлая и тёмная тема — переключается автоматически по теме
+   Telegram (colorScheme), см. applyTheme() в app.js.
    ============================================================ */
 
 :root {
@@ -23,20 +27,23 @@
   --text: #14162B;
   --text-secondary: #6B6E85;
   --text-tertiary: #A6A9C0;
-  --accent: #6E5BFA;
-  --accent-gradient: linear-gradient(135deg, #6E5BFA 0%, #3EC6E0 100%);
-  --hero-gradient: linear-gradient(135deg, #14162B 0%, #4A3F8A 100%);
-  --icon-bg-gradient: linear-gradient(135deg, #EDEAFF 0%, #E1F7FB 100%);
-  --navbar-bg: rgba(255, 255, 255, 0.72);
-  --glow-1: rgba(110, 91, 250, 0.10);
-  --glow-2: rgba(62, 198, 224, 0.10);
+  --accent: #1F7D53;
+  --accent-gradient: linear-gradient(135deg, #255F38 0%, #1F7D53 100%);
+  --danger: #FF3B30;
+  --success: #34C759;
   --radius-lg: 26px;
   --radius-md: 18px;
-  --max-width: 1080px;
+  --radius-sm: 12px;
   --shadow-card: 0 1px 2px rgba(20,22,50,0.05), 0 10px 28px rgba(20,22,50,0.07);
   --shadow-float: 0 10px 34px rgba(20,22,50,0.14), 0 2px 8px rgba(20,22,50,0.06);
+  --glow-1: rgba(31, 125, 83, 0.09);
+  --glow-2: rgba(37, 95, 56, 0.09);
+  --glass-bg: rgba(244, 245, 250, 0.80);
+  --glass-border: rgba(20, 22, 50, 0.06);
 }
 
+/* Тёмная тема — глубокий navy (не чистый чёрный, ближе к "deep space" из брифа),
+   переключается через data-theme на <html>, см. applyTheme() в app.js. */
 [data-theme="dark"] {
   --bg: #0A0B14;
   --surface: #141628;
@@ -45,424 +52,605 @@
   --text: #F5F6FA;
   --text-secondary: #9799B5;
   --text-tertiary: #5C5F80;
-  --accent: #8C7BFF;
-  --accent-gradient: linear-gradient(135deg, #8C7BFF 0%, #4FDCF0 100%);
-  --hero-gradient: linear-gradient(135deg, #F5F6FA 0%, #B8AEFF 100%);
-  --icon-bg-gradient: linear-gradient(135deg, #241F45 0%, #17303A 100%);
-  --navbar-bg: rgba(20, 22, 40, 0.62);
-  --glow-1: rgba(140, 123, 255, 0.30);
-  --glow-2: rgba(79, 220, 240, 0.22);
+  --accent: #1F7D53;
+  --accent-gradient: linear-gradient(135deg, #255F38 0%, #1F7D53 100%);
+  --danger: #FF453A;
+  --success: #32D74B;
   --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 10px 28px rgba(0,0,0,0.4);
   --shadow-float: 0 10px 34px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
+  --glow-1: rgba(31, 125, 83, 0.28);
+  --glow-2: rgba(37, 95, 56, 0.20);
+  --glass-bg: rgba(20, 22, 40, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .category-emoji,
+[data-theme="dark"] .feature-card .icon {
+  background: linear-gradient(180deg, #27391C 0%, #18230F 100%);
 }
 
-* { box-sizing: border-box; }
+body { transition: background-color 0.2s ease, color 0.2s ease; }
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 /* Мягкое появление карточек — ненавязчиво, коротко, не мешает пользоваться. */
 @keyframes fade-up {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.card, .country-tile, .plan-card, .feature-card, .row {
+.category-card, .package-row, .esim-card, .product-card, .row, .card {
   animation: fade-up 0.35s ease both;
   transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
-.country-tile:active, .plan-card:active, .row:active { transform: scale(0.97); }
-html { scroll-behavior: smooth; }
+.package-row:active, .row:active { transform: scale(0.97); }
 
-body {
+html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
-  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  transition: background-color 0.2s ease, color 0.2s ease;
   position: relative;
   overflow-x: hidden;
 }
 
-/* Мягкое размытое свечение на фоне — почти незаметно в светлой теме,
-   но именно оно спасает тёмную тему от плоского "просто чёрного" фона. */
+/* Мягкое размытое свечение на фоне — то же решение, что и на сайте, для
+   единого фирменного вида; в тёмной теме особенно спасает от плоского чёрного. */
 body::before, body::after {
   content: "";
   position: fixed;
-  width: 620px; height: 620px;
+  width: 380px; height: 380px;
   border-radius: 50%;
-  filter: blur(120px);
-  z-index: -1;
+  filter: blur(90px);
+  z-index: 0;
   pointer-events: none;
 }
-body::before { top: -220px; left: -160px; background: var(--glow-1); }
-body::after { bottom: -260px; right: -180px; background: var(--glow-2); }
+body::before { top: -140px; left: -120px; background: var(--glow-1); }
+body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
 
-a { color: inherit; text-decoration: none; }
+#app { position: relative; z-index: 1; }
 
-/* --- "Стеклянная" плавающая навигация --- */
-.navbar-wrap {
-  position: sticky;
-  top: 16px;
-  z-index: 50;
-  padding: 0 16px;
-  margin-bottom: 8px;
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
-.navbar {
+
+/* --- Верхняя панель: тоже "плавающая", с блюром, как навбар в iOS --- */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px 22px;
-  max-width: var(--max-width);
-  margin: 0 auto;
-  background: var(--navbar-bg);
+  gap: 8px;
+  padding: 14px 18px;
+  background: var(--glass-bg);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-radius: 999px;
-  box-shadow: var(--shadow-float);
+  border-bottom: 1px solid var(--glass-border);
 }
-.navbar .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
-.brand-logo { width: 24px; height: 24px; object-fit: cover; border-radius: 7px; }
+.topbar h1 {
+  font-size: 20px;
+  font-weight: 700;      /* Title 3 / bold, ближе к SF Pro Display Bold */
+  letter-spacing: -0.01em;
+  margin: 0;
+  flex: 1;
+}
+
+.brand-logo {
+  width: 26px;
+  height: 26px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
 .brand-logo-dark { display: none; }
 [data-theme="dark"] .brand-logo-light { display: none; }
 [data-theme="dark"] .brand-logo-dark { display: block; }
-.navbar .nav-links { display: flex; align-items: center; gap: 20px; font-size: 14px; }
-.navbar .nav-links a { color: var(--text-secondary); }
-.navbar .nav-links a:hover { color: var(--text); }
-.navbar .nav-links a.cta {
-  background: var(--accent-gradient);
-  color: #fff;
-  padding: 8px 18px;
-  border-radius: 999px;
-  font-weight: 600;
-  box-shadow: 0 4px 14px rgba(10,110,219,0.30);
-}
+
 .lang-switch { display: flex; gap: 4px; }
-.lang-switch a {
+.lang-btn {
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-secondary);
   padding: 5px 9px;
   border-radius: 999px;
-  background: var(--surface-secondary);
 }
-.lang-switch a.active { background: var(--accent-gradient); color: #fff; }
+.lang-btn.active { color: #fff; background: var(--accent-gradient); }
 
-/* --- Переключатель темы (ползунок) --- */
 .theme-toggle {
   position: relative;
-  width: 52px;
-  height: 28px;
+  width: 44px;
+  height: 24px;
   border-radius: 999px;
   border: none;
   background: var(--surface-secondary);
   cursor: pointer;
   flex-shrink: 0;
   padding: 0;
+  margin-left: 6px;
 }
 .theme-toggle::before, .theme-toggle::after {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 11px;
+  font-size: 9px;
   line-height: 1;
 }
-.theme-toggle::before { content: "☀️"; left: 6px; }
-.theme-toggle::after { content: "🌙"; right: 6px; }
+.theme-toggle::before { content: "☀️"; left: 5px; }
+.theme-toggle::after { content: "🌙"; right: 5px; }
 .theme-toggle .knob {
   position: absolute;
-  top: 3px; left: 3px;
-  width: 22px; height: 22px;
+  top: 2px; left: 2px;
+  width: 20px; height: 20px;
   border-radius: 50%;
   background: var(--accent-gradient);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 12px;
   transition: transform 0.2s ease;
 }
-[data-theme="dark"] .theme-toggle .knob { transform: translateX(24px); }
+[data-theme="dark"] .theme-toggle .knob { transform: translateX(20px); }
 
-/* --- Layout --- */
-.container { max-width: var(--max-width); margin: 0 auto; padding: 0 24px; }
-.container.narrow { max-width: 520px; }
-.section { padding: 56px 0; }
-
-/* --- Hero --- */
-.hero { padding: 88px 0 64px; text-align: center; }
-.hero h1 {
-  font-size: 44px; font-weight: 800; letter-spacing: -0.02em;
-  margin: 0 0 20px; max-width: 720px; margin-left: auto; margin-right: auto;
-  background: var(--hero-gradient);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.hero p { font-size: 17px; color: var(--text-secondary); max-width: 560px; margin: 0 auto 32px; }
-
-/* --- Buttons --- */
-.btn {
-  display: inline-block;
-  padding: 15px 30px;
-  border-radius: 999px;
+.icon-btn {
   border: none;
-  background: var(--accent-gradient);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
+  background: none;
+  font-size: 19px;
+  color: var(--accent);
   cursor: pointer;
-  text-align: center;
-  box-shadow: 0 6px 18px rgba(10,110,219,0.32);
-}
-.btn:active { transform: scale(0.98); }
-.btn.block { display: block; width: 100%; }
-.btn.secondary {
-  background: var(--surface-secondary);
-  border: none;
-  color: var(--text);
-  box-shadow: none;
-}
-.region-filter-btn { white-space: nowrap; flex-shrink: 0; padding: 8px 16px; font-size: 13px; }
-.region-filter-btn.active { background: var(--accent-gradient); color: #fff; }
-
-/* --- Карточки стран — цветные плитки с флагом вместо плоских строк --- */
-.country-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-}
-.country-tile {
-  position: relative;
-  border-radius: var(--radius-lg);
-  padding: 18px 16px;
-  overflow: hidden;
-  color: #fff;
-  min-height: 110px;
+  width: 32px;
+  height: 32px;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  box-shadow: var(--shadow-card);
-  background: linear-gradient(145deg, hsl(var(--hue), 70%, 46%) 0%, hsl(calc(var(--hue) + 40), 70%, 34%) 100%);
-}
-.country-tile::after {
-  content: "";
-  position: absolute;
-  top: -30%; right: -20%;
-  width: 140px; height: 140px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.14);
-}
-.country-tile .flag { font-size: 26px; line-height: 1; }
-.country-tile .name { font-size: 14px; font-weight: 700; margin-top: 10px; letter-spacing: -0.01em; }
-.country-tile .price { font-size: 12px; opacity: 0.88; margin-top: 2px; }
-.country-tile .fav-heart {
-  position: absolute; top: 12px; right: 12px;
-  font-size: 16px; z-index: 2;
-  background: rgba(0,0,0,0.18);
-  width: 26px; height: 26px;
-  border-radius: 50%;
-  border: none; color: #fff;
-  display: flex; align-items: center; justify-content: center;
+  align-items: center;
+  justify-content: center;
 }
 
-/* --- Карточки тарифов — с бейджами вместо строк --- */
-.plan-grid { display: grid; gap: 12px; }
-.plan-card {
+/* --- Экраны: отступ снизу, чтобы контент не прятался под плавающим таб-баром --- */
+.screen {
+  flex: 1;
+  padding: 16px 18px calc(96px + env(safe-area-inset-bottom, 0px));
+  overflow-y: auto;
+}
+
+/* Баг, который был на проде: .chat-screen ниже задаёт display:flex классом —
+   а у класса приоритет выше, чем у обычного атрибута [hidden] в UA-стилях,
+   поэтому композер (поле ввода) оставался виден ВСЕГДА, даже на главном
+   экране, а не только внутри открытого чата. Эта строка гарантированно
+   перебивает любой display, если атрибут hidden стоит — вне зависимости
+   от порядка правил в файле. */
+main.screen[hidden] { display: none !important; }
+
+/* --- Поиск / инпуты в стиле iOS (капсула, заполненный серый фон) --- */
+.search, .field select {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 15px;
+  margin-bottom: 14px;
+}
+.search::placeholder { color: var(--text-tertiary); }
+
+/* --- Карточки категорий на главном экране --- */
+.category-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
   background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 18px 20px;
+  margin-bottom: 12px;
   box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.category-card:active { transform: scale(0.98); }
+.category-emoji {
+  font-size: 26px;
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(180deg, #EAF3FF 0%, #DCEBFF 100%);
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+.category-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.category-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+
+/* --- Списки (страны, чаты и т.п.) — сгруппированные iOS-style ряды --- */
+.list {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+.row:last-child { border-bottom: none; }
+.row:active { background: var(--surface-secondary); }
+.row .flag { font-size: 22px; }
+.row .main { flex: 1; min-width: 0; }
+.row .title { font-size: 16px; font-weight: 500; }
+.row .subtitle {
+  font-size: 13px; color: var(--text-secondary);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.row .chevron { color: var(--text-tertiary); font-size: 18px; }
+
+.package-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  padding: 15px 16px;
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
 }
-.plan-card .plan-main { display: flex; align-items: center; gap: 14px; }
-.plan-card .plan-icon {
-  width: 46px; height: 46px;
-  border-radius: 14px;
+.package-row .price { font-weight: 600; color: var(--accent); }
+
+/* --- Карточки / чекаут --- */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-card);
+}
+.card .row-line {
+  display: flex;
+  justify-content: space-between;
+  padding: 7px 0;
+  font-size: 15px;
+}
+.card .row-line.total {
+  font-weight: 700;
+  font-size: 17px;
+  border-top: 1px solid var(--border);
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+/* --- Кнопки — мягкий градиент, как системная синяя кнопка iOS --- */
+.primary-btn {
+  width: 100%;
+  padding: 15px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(31, 125, 83, 0.32);
+}
+.primary-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(31,125,83,0.28); }
+.primary-btn.test-btn {
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
+  border: 1.5px dashed var(--text-tertiary);
+  box-shadow: none;
+}
+
+.hint { font-size: 13px; color: var(--text-secondary); text-align: center; margin: 12px 0; }
+
+/* --- Мои eSIM --- */
+.esim-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+.esim-card .status { font-size: 12px; color: var(--text-secondary); margin-top: 4px; }
+.esim-card .iccid { font-family: ui-monospace, monospace; font-size: 12px; margin-top: 6px; word-break: break-all; color: var(--text-secondary); }
+.qr-image { display: block; width: 168px; height: 168px; margin: 12px auto; border-radius: 16px; background: #fff; padding: 10px; box-shadow: var(--shadow-card); }
+
+/* --- Приветствие сверху экрана "Мои eSIM" --- */
+.esims-greeting {
+  text-align: center;
+  padding: 8px 0 22px;
+}
+.esims-greeting .hint { margin: 0; }
+.esims-count {
+  font-size: 44px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: var(--accent-gradient);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  margin: 2px 0;
+}
+
+/* --- Верх карточки eSIM: цветная плитка-флаг + название + цена --- */
+.esim-card-top { display: flex; align-items: center; gap: 12px; }
+.esim-flag {
+  width: 42px; height: 42px;
+  border-radius: 13px;
   background: var(--icon-bg-gradient);
   display: flex; align-items: center; justify-content: center;
   font-size: 20px;
   flex-shrink: 0;
 }
-.plan-card .plan-title { font-size: 15px; font-weight: 600; }
-.plan-card .plan-badges { display: flex; gap: 6px; margin-top: 4px; }
-.plan-badge {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  background: var(--surface-secondary);
-  padding: 3px 9px;
-  border-radius: 999px;
-}
-.plan-card .plan-price { font-size: 17px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.esim-card-main { flex: 1; min-width: 0; }
+.esim-title { font-size: 15px; font-weight: 600; }
+.esim-price { font-size: 14px; font-weight: 700; color: var(--accent); white-space: nowrap; }
 
-.promo-strip {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  padding-bottom: 4px;
+/* --- Сетка статистики (данные / срок) — как Price/Market Cap в референсе --- */
+.esim-stat-grid { display: flex; gap: 8px; margin-top: 12px; }
+.esim-stat {
+  flex: 1;
+  background: var(--surface-secondary);
+  border-radius: 14px;
+  padding: 10px 12px;
 }
+.esim-stat-label { font-size: 11px; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.04em; }
+.esim-stat-value { font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+/* --- Небольшая вторичная кнопка (баланс, избранное) --- */
+.btn {
+  display: inline-block;
+  padding: 10px 16px;
+  border-radius: 14px;
+  border: none;
+  background: var(--accent-gradient);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn.secondary { background: var(--surface-secondary); color: var(--text); }
+.btn:active { transform: scale(0.97); }
+
+/* --- Плашки-фильтры (Все / Избранное) --- */
+.promo-strip { display: flex; gap: 8px; overflow-x: auto; }
 .promo-pill {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border-radius: 999px;
-  background: var(--surface);
-  box-shadow: var(--shadow-card);
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  text-decoration: none;
-  color: var(--text-secondary);
+  cursor: pointer;
 }
 .promo-pill.active { background: var(--accent-gradient); color: #fff; }
 
-/* --- Feature grid --- */
-.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.feature-card {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 30px;
-  box-shadow: var(--shadow-card);
+/* --- Сердечко избранного на строке страны --- */
+.fav-heart-btn {
+  border: none;
+  background: none;
+  font-size: 18px;
+  color: var(--accent);
+  padding: 4px 6px;
+  cursor: pointer;
 }
-.feature-card .icon {
-  font-size: 24px;
-  width: 52px; height: 52px;
-  display: flex; align-items: center; justify-content: center;
-  background: var(--icon-bg-gradient);
-  border-radius: 16px;
-  margin-bottom: 16px;
-}
-.feature-card h3 { font-size: 16px; margin: 0 0 8px; font-weight: 600; }
-.feature-card p { font-size: 14px; color: var(--text-secondary); margin: 0; }
 
-/* --- How it works --- */
-.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 32px; }
-.step { text-align: center; }
-.step .num {
-  width: 40px; height: 40px;
-  border-radius: 50%;
-  background: var(--accent-gradient);
-  color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-weight: 700;
-  margin: 0 auto 14px;
-  box-shadow: 0 4px 12px rgba(10,110,219,0.28);
-}
-.step h3 { font-size: 15px; margin: 0 0 6px; font-weight: 600; }
-.step p { font-size: 13px; color: var(--text-secondary); margin: 0; }
-
-h2.section-title { font-size: 28px; font-weight: 800; text-align: center; margin: 0 0 40px; letter-spacing: -0.01em; }
-
-/* --- Rows --- */
-.row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 16px 20px;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  margin-bottom: 10px;
-  box-shadow: var(--shadow-card);
-}
-.row:hover { background: var(--surface-secondary); }
-.row .name { font-size: 15px; font-weight: 500; }
-.row .meta { color: var(--text-secondary); font-size: 13px; }
-
-/* --- Cards / forms --- */
-.card {
-  background: var(--surface);
-  border-radius: var(--radius-lg);
-  padding: 28px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow-card);
-}
-.field { margin-bottom: 16px; }
-.field label { display: block; font-size: 13px; color: var(--text-secondary); margin-bottom: 6px; }
-.field input {
+/* --- Форма отзыва на карточке eSIM --- */
+.review-block { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+.review-rating-select {
   width: 100%;
-  padding: 13px 14px;
-  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  border-radius: 12px;
   border: none;
   background: var(--surface-secondary);
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
+  margin-bottom: 8px;
 }
-.field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-.error { color: #FF3B30; font-size: 14px; margin-bottom: 16px; }
-.hint { color: var(--text-secondary); font-size: 13px; }
-.divider { text-align: center; color: var(--text-secondary); font-size: 13px; margin: 20px 0; }
-
-.status-badge {
-  display: inline-block;
-  padding: 7px 16px;
-  border-radius: 999px;
+.review-comment-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: none;
   background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+.review-submit-btn { width: 100%; }
+
+/* --- Ряд быстрых действий на главной --- */
+.quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+.quick-action-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  background: none; border: none; color: var(--text); font-size: 11px; font-weight: 600;
+  cursor: pointer;
+}
+.quick-action-icon {
+  width: 48px; height: 48px; border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; color: #fff;
+}
+.qa-purple { background: linear-gradient(135deg, #27391C, #18230F); }
+.qa-blue { background: linear-gradient(135deg, #255F38, #27391C); }
+.qa-orange { background: linear-gradient(135deg, #FFA24F, #FF7A30); }
+.qa-green { background: linear-gradient(135deg, #1F7D53, #255F38); }
+
+.section-heading { font-size: 17px; font-weight: 700; margin: 20px 0 10px; }
+
+/* --- "Почему мы" --- */
+.why-us-card { background: var(--surface); border-radius: var(--radius-lg); padding: 16px; margin-top: 8px; box-shadow: var(--shadow-card); }
+.why-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; font-size: 14px; }
+.why-icon { font-size: 18px; width: 28px; text-align: center; }
+
+/* --- Маленькая версия градиентной иконки — для строк списка (профиль, "почему мы") --- */
+.row-icon {
+  width: 34px; height: 34px;
+  border-radius: 11px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+/* --- Экран профиля --- */
+.profile-header { display: flex; flex-direction: column; align-items: center; padding: 16px 0 20px; }
+.profile-avatar {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--accent-gradient); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px; font-weight: 700; margin-bottom: 10px;
+}
+.profile-name { font-size: 17px; font-weight: 700; }
+.profile-row { width: 100%; text-align: left; border: none; background: var(--surface); font-family: inherit; color: var(--text); }
+.profile-row .title { color: var(--text); }
+.referral-promo-card { background: var(--surface); border-radius: var(--radius-lg); padding: 16px; margin-top: 16px; box-shadow: var(--shadow-card); }
+
+/* --- Плавающая кнопка чата (вместо отдельной вкладки) --- */
+.floating-chat-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 118px;
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: #fff;
+  border: none;
+  font-size: 20px;
+  box-shadow: var(--shadow-float);
+  z-index: 50;
+}
+.floating-chat-btn:active { transform: scale(0.94); }
+
+/* --- Бейдж непрочитанных уведомлений на колокольчике --- */
+.icon-btn { position: relative; }
+.notif-badge {
+  position: absolute;
+  top: 0px; right: 0px;
+  min-width: 15px; height: 15px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 3px;
+  border: 2px solid var(--bg);
+}
+
+/* --- Шапка чекаута: крупная цена + флаг, как ценник акции в референсе --- */
+.checkout-hero { text-align: center; padding: 10px 0 16px; }
+.checkout-hero-flag {
+  width: 52px; height: 52px;
+  border-radius: 16px;
+  background: var(--icon-bg-gradient);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 26px;
+  margin: 0 auto 10px;
+}
+.checkout-hero-title { font-size: 14px; color: var(--text-secondary); }
+.checkout-hero-price { font-size: 36px; font-weight: 800; letter-spacing: -0.02em; margin-top: 4px; }
+.checkout-hero-price span { font-size: 16px; font-weight: 600; color: var(--text-secondary); }
+
+/* --- Товары (лаунж/туры) --- */
+.product-card {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-card);
+}
+.product-title { font-size: 16px; font-weight: 600; }
+.product-description { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+.product-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.product-price { font-weight: 700; font-size: 15px; color: var(--accent); }
+.ask-btn {
+  padding: 9px 16px;
+  border: none;
+  border-radius: 999px;
+  background: var(--accent-gradient);
+  color: #fff;
   font-size: 13px;
   font-weight: 600;
-  margin-bottom: 20px;
 }
 
-.qr-image { display: block; width: 200px; border-radius: 18px; margin: 20px auto; background: #fff; padding: 12px; box-shadow: var(--shadow-card); }
-.mono { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; }
-
-/* --- Чат (лаунж/туры/поддержка) --- */
-.chat-messages {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 320px;
-  max-height: 56vh;
-  overflow-y: auto;
-  padding: 4px;
-  margin-bottom: 16px;
-}
+/* --- Чат --- */
+.chat-screen { padding: 0 !important; display: flex; flex-direction: column; }
+.messages { flex: 1; padding: 16px 18px calc(96px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 8px; overflow-y: auto; }
 .bubble { max-width: 78%; padding: 10px 14px; border-radius: 18px; font-size: 15px; line-height: 1.4; }
 .bubble.mine { align-self: flex-end; background: var(--accent-gradient); color: #fff; border-bottom-right-radius: 5px; }
 .bubble.theirs { align-self: flex-start; background: var(--surface); border-bottom-left-radius: 5px; box-shadow: var(--shadow-card); }
-.chat-image { display: block; max-width: 220px; max-height: 220px; border-radius: 14px; margin-bottom: 4px; }
+.chat-image { display: block; max-width: 200px; max-height: 200px; border-radius: 14px; margin-bottom: 4px; }
 .chat-file { display: inline-block; font-size: 13px; text-decoration: underline; margin-bottom: 4px; }
+
 .composer {
+  position: fixed;
+  left: 16px; right: 16px;
+  bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   display: flex;
   gap: 8px;
-  padding: 8px;
-  background: var(--surface);
+  padding: 10px 12px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-radius: 999px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--shadow-float);
+  z-index: 15;
 }
 .composer input {
   flex: 1;
-  padding: 10px 14px;
+  padding: 10px 6px;
   border: none;
   background: transparent;
   color: var(--text);
   font-size: 15px;
 }
 .composer input:focus { outline: none; }
-.composer .send-btn {
-  width: 40px; height: 40px;
+.attach-btn { border: none; background: none; font-size: 20px; cursor: pointer; flex-shrink: 0; padding: 0 2px; }
+.send-btn {
+  width: 36px; height: 36px;
   border-radius: 50%;
   border: none;
   background: var(--accent-gradient);
   color: #fff;
-  font-size: 16px;
+  font-size: 15px;
   flex-shrink: 0;
 }
+/* композер плавает поверх контента чата — добавляем запас снизу списку сообщений */
+.messages { padding-bottom: calc(150px + env(safe-area-inset-bottom, 0px)); }
 
-/* --- Footer --- */
-.footer {
-  padding: 32px 0 48px;
-  margin-top: 32px;
-  text-align: center;
-  color: var(--text-secondary);
-  font-size: 13px;
-}
+.empty { color: var(--text-tertiary); font-size: 14px; text-align: center; padding: 32px 0; }
 
-@media (max-width: 720px) {
-  .navbar { padding: 10px 16px; flex-wrap: wrap; gap: 10px; border-radius: 24px; }
-  .hero h1 { font-size: 32px; }
-  .features, .steps { grid-template-columns: 1fr; }
-  .section { padding: 40px 0; }
-  .country-grid { grid-template-columns: repeat(2, 1fr); }
-  .plan-card { flex-wrap: wrap; }
+/* ============================================================
+   Плавающий таб-бар — визитная карточка iOS: капсула с отступами
+   от краёв экрана, "стеклянный" блюр-фон, тень, всегда видна.
+   ============================================================ */
+.tabbar {
+  position: fixed;
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  justify-content: space-around;
+  padding: 10px 8px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border-radius: 28px;
+  box-shadow: var(--shadow-float);
+  z-index: 30;
 }
+.tab-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 0;
+  border-radius: 18px;
+  transition: color 0.15s ease;
+}
+.tab-btn.active { color: var(--accent); }
+.tab-icon { font-size: 21px; }

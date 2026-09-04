@@ -319,6 +319,9 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
     "no_reviews_yet": {"ru": "Пока нет отзывов — стань первым.", "hy": "Դեռ կարծիքներ չկան։", "en": "No reviews yet — be the first."},
     "days_short": {"ru": "дн.", "hy": "օր", "en": "days"},
 
+    "home_regions_title": {"ru": "Региональные пакеты", "hy": "Տարածաշրջանային փաթեթներ", "en": "Regional plans"},
+    "region_from": {"ru": "от", "hy": "-ից", "en": "from"},
+
     "notif_title": {"ru": "Уведомления", "hy": "Ծանուցումներ", "en": "Notifications"},
     "notif_filter_all": {"ru": "Все", "hy": "Բոլորը", "en": "All"},
     "notif_filter_order": {"ru": "Заказы", "hy": "Պատվերներ", "en": "Orders"},

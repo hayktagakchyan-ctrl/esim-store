@@ -20,7 +20,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from app.config import settings
 from app.database.db import get_session
@@ -131,36 +131,68 @@ async def terms_page(request: Request):
     return await render(request, "terms.html")
 
 
+async def _fetch_country_list(session):
+    """
+    Список стран для выбора — только отдельные страны (не региональные пакеты,
+    у тех своя секция). Для каждого кода страны берём country_name именно из
+    самой СВЕЖЕЙ по updated_at записи — если где-то раньше вручную завели пакет
+    с опечаткой в названии (например код "AD" с названием "AD" вместо "Andorra"),
+    это не даст ему всплыть как отдельному "призрачному" пункту в списке рядом
+    с правильной записью.
+    """
+    latest_per_code = (
+        select(Package.country_code, func.max(Package.updated_at).label("max_updated"))
+        .where(Package.is_active.is_(True), Package.is_regional.is_(False))
+        .group_by(Package.country_code)
+        .subquery()
+    )
+    result = await session.execute(
+        select(Package.country_code, Package.country_name)
+        .join(
+            latest_per_code,
+            (Package.country_code == latest_per_code.c.country_code)
+            & (Package.updated_at == latest_per_code.c.max_updated),
+        )
+        .distinct()
+        .order_by(Package.country_name)
+    )
+    return [{"code": c, "name": n} for c, n in result.all()]
+
+
+async def _fetch_region_list(session):
+    """Региональные пакеты — по одному представителю (самый дешёвый активный) на регион."""
+    result = await session.execute(
+        select(Package)
+        .where(Package.is_regional.is_(True), Package.is_active.is_(True))
+        .order_by(Package.country_code, Package.sell_price)
+    )
+    packages = list(result.scalars())
+    seen = set()
+    regions = []
+    for p in packages:
+        if p.country_code in seen:
+            continue
+        seen.add(p.country_code)
+        regions.append({"code": p.country_code, "name": p.country_name, "from_price": float(p.sell_price)})
+    return regions
+
+
 @router.get("/shop/", response_class=HTMLResponse)
 async def shop_home(request: Request):
     async with get_session() as session:
-        result = await session.execute(
-            select(Package.country_code, Package.country_name)
-            .where(Package.is_active.is_(True))
-            .distinct()
-            .order_by(Package.country_name)
-        )
-        countries = result.all()
+        countries = await _fetch_country_list(session)
+        regions = await _fetch_region_list(session)
 
-    return await render(
-        request, "home.html", countries=[{"code": c, "name": n} for c, n in countries]
-    )
+    return await render(request, "home.html", countries=countries, regions=regions)
 
 
 @router.get("/shop/catalog", response_class=HTMLResponse)
 async def shop_catalog(request: Request):
     async with get_session() as session:
-        result = await session.execute(
-            select(Package.country_code, Package.country_name)
-            .where(Package.is_active.is_(True))
-            .distinct()
-            .order_by(Package.country_name)
-        )
-        countries = result.all()
+        countries = await _fetch_country_list(session)
+        regions = await _fetch_region_list(session)
 
-    return await render(
-        request, "catalog.html", countries=[{"code": c, "name": n} for c, n in countries]
-    )
+    return await render(request, "catalog.html", countries=countries, regions=regions)
 
 
 @router.get("/shop/country/{country_code}", response_class=HTMLResponse)

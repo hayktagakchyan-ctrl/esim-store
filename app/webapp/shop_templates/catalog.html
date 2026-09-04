@@ -34,6 +34,25 @@
   </div>
 </section>
 
+{% if regions %}
+<section class="section" style="border-top:1px solid var(--border);">
+  <div class="container">
+    <h2 class="section-title">{{ t("home_regions_title") }}</h2>
+    <div class="list">
+      {% for r in regions %}
+      <a class="row" href="/shop/country/{{ r.code }}">
+        <span class="flag">🌐</span>
+        <div>
+          <div class="name">{{ r.name }}</div>
+          <div class="meta">{{ t("region_from") }} ${{ "%.2f"|format(r.from_price) }}</div>
+        </div>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <script>
 (function () {
   // Приблизительная карта регион <- код страны, для фильтра. Страны, которых

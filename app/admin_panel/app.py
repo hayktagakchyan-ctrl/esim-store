@@ -796,47 +796,53 @@ async def bulk_import_submit(
     with open(CATALOG_SNAPSHOT_PATH, encoding="utf-8") as f:
         catalog = json.load(f)
 
+    BATCH_SIZE = 200  # коммитим партиями, а не всё одним гигантским запросом —
+    # так надёжнее при 3000+ строках (меньше риск таймаута/лимитов на размер запроса,
+    # и если что-то упадёт на середине, часть уже сохранённых пакетов не потеряется).
+
     created = 0
     updated = 0
+
     async with get_session() as session:
-        # Заранее загружаем существующие коды пакетов одним запросом — быстрее, чем
-        # проверять каждый по отдельности при 3000+ записях.
         existing = {
             p.esimaccess_package_code: p
             for p in (await session.execute(select(Package))).scalars()
         }
 
-        for item in catalog:
-            cost_price = item["price_usd"]
-            sell_price = round(cost_price * (1 + markup_percent / 100), 2)
-            code = item["package_code"]
+    for batch_start in range(0, len(catalog), BATCH_SIZE):
+        batch = catalog[batch_start:batch_start + BATCH_SIZE]
+        async with get_session() as session:
+            for item in batch:
+                cost_price = item["price_usd"]
+                sell_price = round(cost_price * (1 + markup_percent / 100), 2)
+                code = item["package_code"]
 
-            if code in existing:
-                pkg = existing[code]
-                pkg.cost_price = cost_price
-                pkg.sell_price = sell_price
-                pkg.data_amount_mb = item["data_amount_mb"]
-                pkg.validity_days = item["validity_days"]
-                pkg.country_code = item["country_code"]
-                pkg.country_name = item["country_name"]
-                pkg.is_regional = item["is_regional"]
-                updated += 1
-            else:
-                session.add(Package(
-                    esimaccess_package_code=code,
-                    country_code=item["country_code"],
-                    country_name=item["country_name"],
-                    title=f"{item['data_amount_mb'] / 1024:.1f} ГБ / {item['validity_days']} дн.".replace(".0 ", " "),
-                    data_amount_mb=item["data_amount_mb"],
-                    validity_days=item["validity_days"],
-                    cost_price=cost_price,
-                    sell_price=sell_price,
-                    currency="USD",
-                    is_active=True,
-                    is_regional=item["is_regional"],
-                ))
-                created += 1
+                if code in existing:
+                    pkg = await session.get(Package, existing[code].id)
+                    pkg.cost_price = cost_price
+                    pkg.sell_price = sell_price
+                    pkg.data_amount_mb = item["data_amount_mb"]
+                    pkg.validity_days = item["validity_days"]
+                    pkg.country_code = item["country_code"]
+                    pkg.country_name = item["country_name"]
+                    pkg.is_regional = item["is_regional"]
+                    updated += 1
+                else:
+                    session.add(Package(
+                        esimaccess_package_code=code,
+                        country_code=item["country_code"],
+                        country_name=item["country_name"],
+                        title=f"{item['data_amount_mb'] / 1024:.1f} ГБ / {item['validity_days']} дн.".replace(".0 ", " "),
+                        data_amount_mb=item["data_amount_mb"],
+                        validity_days=item["validity_days"],
+                        cost_price=cost_price,
+                        sell_price=sell_price,
+                        currency="USD",
+                        is_active=True,
+                        is_regional=item["is_regional"],
+                    ))
+                    created += 1
 
-        await session.commit()
+            await session.commit()
 
     return RedirectResponse(url=f"/packages?imported={created}&updated={updated}", status_code=302)

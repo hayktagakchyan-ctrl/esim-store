@@ -46,7 +46,7 @@ class Package(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     esimaccess_package_code: Mapped[str] = mapped_column(String(128), unique=True, index=True)
-    country_code: Mapped[str] = mapped_column(String(8), index=True)   # ISO-код страны, напр. "AM" — для региональных пакетов сюда пишется код региона (напр. "EU-42")
+    country_code: Mapped[str] = mapped_column(String(32), index=True)  # ISO-код страны, напр. "AM" — для региональных пакетов сюда пишется код региона (напр. "EU-42", "SAAEQAKWOMBH-6")
     country_name: Mapped[str] = mapped_column(String(128))
     title: Mapped[str] = mapped_column(String(255))                    # напр. "5 ГБ / 30 дней"
     data_amount_mb: Mapped[int] = mapped_column(Integer)
@@ -378,7 +378,7 @@ class Review(Base):
     website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"), unique=True)  # один отзыв на один заказ
-    country_code: Mapped[str] = mapped_column(String(8), index=True)
+    country_code: Mapped[str] = mapped_column(String(32), index=True)
     rating: Mapped[int] = mapped_column()  # 1..5
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -396,7 +396,7 @@ class Favorite(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
     user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
-    country_code: Mapped[str] = mapped_column(String(8))
+    country_code: Mapped[str] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

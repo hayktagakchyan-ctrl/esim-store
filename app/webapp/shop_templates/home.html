@@ -2,13 +2,20 @@
 {% block title %}{{ t("hero_title") }} — {{ t("brand") }}{% endblock %}
 {% block body %}
 
-<section class="hero">
+<section class="hero-v2">
   <div class="container narrow">
+    <div class="eyebrow-badge">{{ t("hero_badge") }}</div>
     <h1>{{ t("hero_title") }}</h1>
     <p>{{ t("hero_subtitle") }}</p>
-    <a class="btn" href="/shop/catalog">{{ t("hero_cta") }}</a>
-    <div class="promo-strip" style="justify-content:center; margin-top:28px;">
-      <div class="promo-pill">🌍 100+ {{ t("filter_all")|lower }}</div>
+
+    <form class="search-cta" action="/shop/catalog" method="get">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <span class="search-cta-placeholder">{{ t('search_placeholder') }}</span>
+      <button class="btn" type="submit">{{ t("hero_cta") }}</button>
+    </form>
+
+    <div class="promo-strip" style="justify-content:center; margin-top:20px;">
+      <div class="promo-pill">🌍 {{ countries|length }}+ {{ t("filter_all")|lower }}</div>
       <div class="promo-pill">⚡ {{ t("feature_instant_title") }}</div>
       <div class="promo-pill">💳 {{ t("feature_payment_title") }}</div>
     </div>
@@ -37,20 +44,20 @@
   </div>
 </section>
 
-<section class="section" style="border-top:1px solid var(--border);">
+<section class="section section-alt">
   <div class="container">
-    <h2 class="section-title">{{ t("how_title") }}</h2>
-    <div class="steps">
+    <h2 class="section-title center">{{ t("how_title") }}</h2>
+    <div class="steps steps-ghost">
       <div class="step">
-        <div class="num">1</div>
+        <div class="ghost-num">01</div>
         <h3>{{ t("how_step1_title") }}</h3>
       </div>
       <div class="step">
-        <div class="num">2</div>
+        <div class="ghost-num">02</div>
         <h3>{{ t("how_step2_title") }}</h3>
       </div>
       <div class="step">
-        <div class="num">3</div>
+        <div class="ghost-num">03</div>
         <h3>{{ t("how_step3_title") }}</h3>
         <p>{{ t("how_step3_desc") }}</p>
       </div>
@@ -58,30 +65,31 @@
   </div>
 </section>
 
-<section class="section" style="border-top:1px solid var(--border);">
+<section class="section">
   <div class="container">
-    <h2 class="section-title">{{ t("catalog_title") }}</h2>
+    <div class="section-header-row">
+      <h2 class="section-title">{{ t("catalog_title") }}</h2>
+      <a class="btn secondary" href="/shop/catalog">{{ t("home_view_all") }}</a>
+    </div>
     <div class="country-grid">
     {% for c in countries[:8] %}
-    <a class="country-tile" href="/shop/country/{{ c.code }}" style="--hue: {{ c.code|hue }};">
+    <a class="country-tile {{ 'accent' if c.review_count }}" href="/shop/country/{{ c.code }}" style="--hue: {{ c.code|hue }};">
       <span class="flag">{{ c.code|flag }}</span>
       <div>
         <div class="name">{{ c.name }}</div>
-        <div class="price">{% if c.review_count %}★ {{ c.avg_rating }}{% endif %}</div>
+        {% if c.review_count %}<div class="top-pick-label">{{ t("home_top_pick") }}</div>{% endif %}
       </div>
+      {% if c.review_count %}<div class="tile-rating">★ {{ c.avg_rating }}</div>{% endif %}
     </a>
     {% else %}
     <p class="hint" style="text-align:center;">—</p>
     {% endfor %}
     </div>
-    {% if countries|length > 8 %}
-    <p style="text-align:center; margin-top:16px;"><a class="btn secondary" href="/shop/catalog">{{ t("hero_cta") }}</a></p>
-    {% endif %}
   </div>
 </section>
 
 {% if regions %}
-<section class="section" style="border-top:1px solid var(--border);">
+<section class="section section-alt">
   <div class="container">
     <h2 class="section-title">{{ t("home_regions_title") }}</h2>
     <div class="list">
@@ -99,25 +107,13 @@
 </section>
 {% endif %}
 
-<section class="section" style="border-top:1px solid var(--border);">
+<section class="section section-alt">
   <div class="container narrow">
-    <h2 class="section-title">{{ t("faq_title") }}</h2>
-    <div class="card">
-      <p><strong>{{ t("faq_q1") }}</strong></p>
-      <p class="hint">{{ t("faq_a1") }}</p>
-    </div>
-    <div class="card">
-      <p><strong>{{ t("faq_q2") }}</strong></p>
-      <p class="hint">{{ t("faq_a2") }}</p>
-    </div>
-    <div class="card">
-      <p><strong>{{ t("faq_q3") }}</strong></p>
-      <p class="hint">{{ t("faq_a3") }}</p>
-    </div>
-    <div class="card">
-      <p><strong>{{ t("faq_q4") }}</strong></p>
-      <p class="hint">{{ t("faq_a4") }}</p>
-    </div>
+    <h2 class="section-title center">{{ t("faq_title") }}</h2>
+    <details class="faq-card"><summary>{{ t("faq_q1") }}</summary><p class="hint">{{ t("faq_a1") }}</p></details>
+    <details class="faq-card"><summary>{{ t("faq_q2") }}</summary><p class="hint">{{ t("faq_a2") }}</p></details>
+    <details class="faq-card"><summary>{{ t("faq_q3") }}</summary><p class="hint">{{ t("faq_a3") }}</p></details>
+    <details class="faq-card"><summary>{{ t("faq_q4") }}</summary><p class="hint">{{ t("faq_a4") }}</p></details>
   </div>
 </section>
 

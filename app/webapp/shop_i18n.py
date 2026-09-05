@@ -7,6 +7,7 @@ from fastapi import Request
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "brand": {"ru": "KaLine", "hy": "KaLine", "en": "KaLine"},
 
+    "nav_home": {"ru": "Главная", "hy": "Գլխավոր", "en": "Home"},
     "nav_catalog": {"ru": "Тарифы", "hy": "Սակագներ", "en": "Plans"},
     "nav_services": {"ru": "Другие услуги", "hy": "Այլ ծառայություններ", "en": "Other services"},
     "nav_login": {"ru": "Войти", "hy": "Մուտք", "en": "Log in"},
@@ -15,6 +16,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "nav_my_orders": {"ru": "Мои заказы", "hy": "Իմ պատվերները", "en": "My orders"},
     "nav_my_chats": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
 
+    "hero_badge": {
+        "ru": "Твой цифровой роуминг",
+        "hy": "Քո թվային ռոումինգը",
+        "en": "Your digital roaming",
+    },
     "hero_title": {
         "ru": "Интернет в поездке — за пару минут",
         "hy": "Ինտերնետ ճամփորդության ընթացքում՝ մի քանի րոպեում",
@@ -57,6 +63,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     "catalog_title": {"ru": "Выбери страну", "hy": "Ընտրիր երկիրը", "en": "Choose a country"},
+    "home_view_all": {"ru": "Все направления", "hy": "Բոլոր ուղղությունները", "en": "All destinations"},
+    "home_top_pick": {"ru": "Топ выбор", "hy": "Թոփ ընտրություն", "en": "Top pick"},
     "back_to_countries": {"ru": "← Все страны", "hy": "← Բոլոր երկրները", "en": "← All countries"},
     "back_to_plans": {"ru": "← Назад к тарифам", "hy": "← Հետ սակագներին", "en": "← Back to plans"},
 

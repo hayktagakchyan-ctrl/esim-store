@@ -100,6 +100,11 @@ class Order(Base):
 
     refund_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Последний известный остаток — приходит вебхуками DATA_USAGE/VALIDITY_USAGE от esimaccess.
+    # Общий объём данных берём из package.data_amount_mb (он не меняется), а не храним отдельно.
+    data_remaining_mb: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    validity_days_remaining: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # Для заказов с САЙТА (не из Telegram) — там нет telegram-идентичности, поэтому
     # покупатель отслеживает заказ по email + случайной ссылке (guest_token), а не логином.
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)

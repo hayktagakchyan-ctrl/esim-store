@@ -17,18 +17,22 @@
 
     <p class="hint" style="margin-bottom:16px;">{{ t("logged_in_as") }} <strong>{{ account.email }}</strong></p>
 
+    <div class="card">
+      <div class="hint" style="margin-bottom:8px;">{{ t("promo_title") }}</div>
+      {% if promo_success %}<p class="hint" style="color:var(--success);">+ ${{ "%.2f"|format(promo_success) }}</p>{% endif %}
+      {% if promo_error %}<p class="error">{{ t(promo_error) }}</p>{% endif %}
+      <form method="post" action="/shop/checkout/{{ package.id }}/promo" style="display:flex; gap:8px;">
+        <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" class="field" style="flex:1; margin:0;">
+        <button class="btn secondary" type="submit" style="white-space:nowrap;">{{ t("promo_redeem_btn") }}</button>
+      </form>
+    </div>
+
     <form method="post" action="/shop/checkout/{{ package.id }}">
       {% if can_pay_from_balance %}
-      <button class="btn block" type="submit" name="method" value="balance" style="margin-bottom:10px;">{{ t("checkout_pay_balance") }} (${{ "%.2f"|format(balance) }})</button>
+      <button class="btn block" type="submit" name="method" value="balance">{{ t("checkout_pay_balance") }} (${{ "%.2f"|format(balance) }})</button>
       {% else %}
-      <p class="hint" style="margin-bottom:10px;">{{ t("checkout_balance_low") }} ${{ "%.2f"|format(balance) }} — <a href="/shop/account/balance">{{ t("nav_balance") }}</a></p>
-      {% endif %}
-      <button class="btn block" type="submit" name="method" value="idram">{{ t("checkout_pay_idram") }}</button>
-      {% if oxapay_enabled %}
-      <button class="btn secondary block" type="submit" name="method" value="oxapay" style="margin-top:10px;">{{ t("checkout_pay_oxapay") }}</button>
-      {% endif %}
-      {% if test_payment_enabled %}
-      <button class="btn block" type="submit" name="method" value="test" style="margin-top:10px; background:none; border:2px dashed var(--text-tertiary); color:var(--text-secondary); box-shadow:none;">🧪 Тестовая оплата</button>
+      <p class="hint" style="margin-bottom:10px;">{{ t("checkout_balance_low") }} ${{ "%.2f"|format(balance) }}</p>
+      <a class="btn block" href="/shop/account/balance">{{ t("checkout_topup_cta") }}</a>
       {% endif %}
     </form>
 

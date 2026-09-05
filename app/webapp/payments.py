@@ -178,16 +178,12 @@ class InitiatePaymentRequest(BaseModel):
 async def initiate_payment(
     order_id: int, body: InitiatePaymentRequest, user: User = Depends(get_current_user)
 ):
-    if body.method not in PROVIDER_BY_METHOD and body.method != "balance":
-        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
-    if body.method == "test" and not settings.ENABLE_TEST_PAYMENT:
-        # Проверка и на сервере, не только в интерфейсе — на случай, если кто-то
-        # обратится к API напрямую, минуя саму кнопку (которая скрыта, если выключено).
-        raise HTTPException(status_code=403, detail="Тестовая оплата отключена")
-    if body.method == "wallet_pay" and not settings.ENABLE_WALLET_PAY:
-        raise HTTPException(status_code=403, detail="Оплата через Wallet Pay временно недоступна")
-    if body.method == "oxapay" and not settings.ENABLE_OXAPAY:
-        raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+    if body.method != "balance":
+        # Заказы (в отличие от пополнения баланса) сейчас оплачиваются ТОЛЬКО с баланса —
+        # так решили сознательно, а не просто скрыли кнопки в интерфейсе. Idram/OxaPay
+        # остаются доступны для пополнения баланса (см. /api/balance/topup), просто не
+        # как прямой способ оплаты конкретного заказа.
+        raise HTTPException(status_code=403, detail="Оплата заказов сейчас доступна только с баланса")
 
     async with get_session() as session:
         order = await session.get(Order, order_id)

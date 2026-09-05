@@ -107,12 +107,6 @@ function showScreen(name) {
   };
   document.getElementById("header-title").textContent = titles[name] || "KaLine";
 
-  // Переключатель языка и темы — только на главном экране. На внутренних экранах
-  // (особенно там, где заголовок длиннее, вроде "Мой баланс") они просто не влезали
-  // и заголовок переносился на 2 строки. Язык/тема и так доступны через профиль/главную.
-  document.querySelector(".lang-switch").hidden = name !== "home";
-  document.getElementById("theme-toggle").hidden = name !== "home";
-
   const activeTab = isTabRoot ? TAB_ROOTS[name] :
     ["esim-packages", "esim-checkout", "products"].includes(name) ? "browse" :
     ["balance", "notifications", "chats", "chat"].includes(name) ? "profile" : null;
@@ -135,7 +129,7 @@ document.getElementById("back-btn").addEventListener("click", () => {
 document.querySelectorAll(".tab-btn").forEach((btn) => {
   btn.addEventListener("click", () => {
     const tab = btn.dataset.tab;
-    if (tab === "home") { loadHomeCategories(); loadRegionBundles(); showScreen("home"); }
+    if (tab === "home") { loadHomeCategories(); showScreen("home"); }
     if (tab === "browse") { loadCountries(); showScreen("esim-countries"); }
     if (tab === "my-esims") { loadMyEsims(); showScreen("my-esims"); }
     if (tab === "profile") { loadProfile(); showScreen("profile"); }
@@ -158,8 +152,11 @@ document.getElementById("quick-favorites").addEventListener("click", () => {
 });
 document.getElementById("quick-topup").addEventListener("click", () => { loadBalance(); showScreen("balance"); });
 
-document.querySelectorAll(".lang-btn").forEach((btn) => {
-  btn.addEventListener("click", () => setLang(btn.dataset.lang));
+const LANG_CYCLE = ["ru", "hy", "en"];
+document.getElementById("profile-lang-row").addEventListener("click", () => {
+  const next = LANG_CYCLE[(LANG_CYCLE.indexOf(currentLang) + 1) % LANG_CYCLE.length];
+  setLang(next);
+  document.getElementById("profile-lang-value").textContent = next.toUpperCase();
 });
 
 window.onLangChange = () => {
@@ -176,28 +173,6 @@ document.getElementById("category-esim").addEventListener("click", () => {
   loadCountries();
   showScreen("esim-countries");
 });
-
-async function loadRegionBundles() {
-  const regions = await api("/api/regions");
-  const list = document.getElementById("region-list");
-  list.innerHTML = "";
-  for (const r of regions) {
-    const row = document.createElement("div");
-    row.className = "plan-card";
-    row.innerHTML = `
-      <div class="plan-main">
-        <div class="plan-icon">🌐</div>
-        <div>
-          <div class="plan-title">${escapeHtml(r.name)}</div>
-          <div class="hint">${t("region_from")} $${r.from_price.toFixed(2)}</div>
-        </div>
-      </div>
-      <span class="chevron">›</span>
-    `;
-    row.addEventListener("click", () => openCountry({ code: r.code, name: r.name }));
-    list.appendChild(row);
-  }
-}
 
 async function loadHomeCategories() {
   const categories = await api(`/api/categories?lang=${currentLang}`);
@@ -224,69 +199,110 @@ async function loadHomeCategories() {
 
 // --- eSIM: страны ---
 let favoriteCodes = [];
+let allCountries = [];
+let allRegions = [];
+let currentCountryFilter = "all"; // "all" | "favorites" | "regions"
+
+function renderCountryRow(c) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.dataset.code = c.code;
+  const isFav = favoriteCodes.includes(c.code);
+  const ratingHtml = c.review_count ? `<span class="hint">★ ${c.avg_rating}</span>` : "";
+  row.innerHTML = `
+    <span class="flag">${countryCodeToFlag(c.code)}</span>
+    <div class="main"><div class="title">${escapeHtml(c.name)}</div>${ratingHtml}</div>
+    <button class="fav-heart-btn" data-code="${c.code}">${isFav ? "♥" : "♡"}</button>
+    <span class="chevron">›</span>
+  `;
+  row.querySelector(".main").addEventListener("click", () => openCountry(c));
+  row.querySelector(".flag").addEventListener("click", () => openCountry(c));
+  row.querySelector(".chevron").addEventListener("click", () => openCountry(c));
+  row.querySelector(".fav-heart-btn").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    const result = await api("/api/favorites/toggle", {
+      method: "POST",
+      body: JSON.stringify({ country_code: c.code }),
+    });
+    e.target.textContent = result.is_favorite ? "♥" : "♡";
+    if (result.is_favorite) favoriteCodes.push(c.code);
+    else favoriteCodes = favoriteCodes.filter((code) => code !== c.code);
+    applyCountryListFilters();
+  });
+  return row;
+}
+
+function renderRegionRow(r) {
+  const row = document.createElement("div");
+  row.className = "row";
+  row.dataset.code = r.code;
+  row.innerHTML = `
+    <span class="flag">🌐</span>
+    <div class="main">
+      <div class="title">${escapeHtml(r.name)}</div>
+      <div class="hint">${t("region_from")} $${r.from_price.toFixed(2)}</div>
+    </div>
+    <span class="chevron">›</span>
+  `;
+  row.addEventListener("click", () => openCountry({ code: r.code, name: r.name }));
+  return row;
+}
+
+function applyCountryListFilters() {
+  const q = document.getElementById("search-input").value.trim().toLowerCase();
+  const list = document.getElementById("country-list");
+  list.innerHTML = "";
+
+  if (currentCountryFilter === "regions") {
+    const matches = allRegions.filter((r) => !q || r.name.toLowerCase().includes(q));
+    if (matches.length === 0) {
+      list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
+      return;
+    }
+    matches.forEach((r) => list.appendChild(renderRegionRow(r)));
+    return;
+  }
+
+  const source = currentCountryFilter === "favorites"
+    ? allCountries.filter((c) => favoriteCodes.includes(c.code))
+    : allCountries;
+  const matches = source.filter((c) => !q || c.name.toLowerCase().includes(q));
+  if (matches.length === 0) {
+    list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
+    return;
+  }
+  matches.forEach((c) => list.appendChild(renderCountryRow(c)));
+}
 
 async function loadCountries() {
-  const countries = await api("/api/countries");
+  allCountries = await api("/api/countries");
   try {
     favoriteCodes = (await api("/api/favorites")).codes || [];
   } catch (e) {
     favoriteCodes = [];
   }
-  const list = document.getElementById("country-list");
-  list.innerHTML = "";
-  if (countries.length === 0) {
-    list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
-    return;
+  try {
+    allRegions = await api("/api/regions");
+  } catch (e) {
+    allRegions = [];
   }
-  for (const c of countries) {
-    const row = document.createElement("div");
-    row.className = "row";
-    row.dataset.code = c.code;
-    const isFav = favoriteCodes.includes(c.code);
-    row.innerHTML = `
-      <span class="flag">${countryCodeToFlag(c.code)}</span>
-      <div class="main"><div class="title">${c.name}</div></div>
-      <button class="fav-heart-btn" data-code="${c.code}">${isFav ? "♥" : "♡"}</button>
-      <span class="chevron">›</span>
-    `;
-    row.querySelector(".main").addEventListener("click", () => openCountry(c));
-    row.querySelector(".flag").addEventListener("click", () => openCountry(c));
-    row.querySelector(".chevron").addEventListener("click", () => openCountry(c));
-    row.querySelector(".fav-heart-btn").addEventListener("click", async (e) => {
-      e.stopPropagation();
-      const result = await api("/api/favorites/toggle", {
-        method: "POST",
-        body: JSON.stringify({ country_code: c.code }),
-      });
-      e.target.textContent = result.is_favorite ? "♥" : "♡";
-      if (result.is_favorite) favoriteCodes.push(c.code);
-      else favoriteCodes = favoriteCodes.filter((code) => code !== c.code);
-      if (!document.getElementById("filter-favorites-btn").classList.contains("active")) return;
-      if (!result.is_favorite) row.hidden = true;
-    });
-    list.appendChild(row);
-  }
+  applyCountryListFilters();
 }
 
-document.getElementById("filter-all-btn").addEventListener("click", () => {
-  document.getElementById("filter-all-btn").classList.add("active");
-  document.getElementById("filter-favorites-btn").classList.remove("active");
-  document.querySelectorAll("#country-list .row").forEach((row) => { row.hidden = false; });
-});
-document.getElementById("filter-favorites-btn").addEventListener("click", () => {
-  document.getElementById("filter-favorites-btn").classList.add("active");
-  document.getElementById("filter-all-btn").classList.remove("active");
-  document.querySelectorAll("#country-list .row").forEach((row) => {
-    row.hidden = !favoriteCodes.includes(row.dataset.code);
-  });
-});
+function setCountryFilter(filter) {
+  currentCountryFilter = filter;
+  document.getElementById("filter-all-btn").classList.toggle("active", filter === "all");
+  document.getElementById("filter-favorites-btn").classList.toggle("active", filter === "favorites");
+  document.getElementById("filter-regions-btn").classList.toggle("active", filter === "regions");
+  applyCountryListFilters();
+}
 
-document.getElementById("search-input").addEventListener("input", (e) => {
-  const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll("#country-list .row").forEach((row) => {
-    const title = row.querySelector(".title").textContent.toLowerCase();
-    row.style.display = title.includes(q) ? "" : "none";
-  });
+document.getElementById("filter-all-btn").addEventListener("click", () => setCountryFilter("all"));
+document.getElementById("filter-favorites-btn").addEventListener("click", () => setCountryFilter("favorites"));
+document.getElementById("filter-regions-btn").addEventListener("click", () => setCountryFilter("regions"));
+
+document.getElementById("search-input").addEventListener("input", () => {
+  applyCountryListFilters();
 });
 
 async function openCountry(country) {
@@ -357,25 +373,52 @@ async function openCheckout(pkg) {
       ${pkg.validity_days ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_validity")}</div><div class="esim-stat-value">${pkg.validity_days} ${t("days_short")}</div></div>` : ""}
     </div>
   `;
-  document.getElementById("payment-methods").hidden = false;
   document.getElementById("payment-waiting").hidden = true;
-  document.getElementById("pay-walletpay-btn").hidden = !walletPayEnabled;
-  document.getElementById("pay-oxapay-btn").hidden = !oxapayEnabled;
-  document.getElementById("pay-test-btn").hidden = !testPaymentEnabled;
 
   const balanceBtn = document.getElementById("pay-balance-btn");
-  balanceBtn.hidden = true;
+  const methodsBlock = document.getElementById("payment-methods");
+  const insufficientBlock = document.getElementById("insufficient-balance");
+  methodsBlock.hidden = true;
+  insufficientBlock.hidden = true;
+  balanceBtn.disabled = false;
   showScreen("esim-checkout");
+
   try {
     const balanceData = await api("/api/balance");
     if (balanceData.balance >= pkg.price) {
       balanceBtn.textContent = `${t("checkout_pay_balance")} ($${balanceData.balance.toFixed(2)})`;
-      balanceBtn.hidden = false;
+      methodsBlock.hidden = false;
+    } else {
+      document.getElementById("insufficient-balance-amount").textContent =
+        `$${balanceData.balance.toFixed(2)} / $${pkg.price}`;
+      insufficientBlock.hidden = false;
     }
   } catch (e) {
-    // не критично — просто не покажем кнопку оплаты с баланса
+    insufficientBlock.hidden = false;
   }
 }
+
+document.getElementById("checkout-topup-btn").addEventListener("click", () => {
+  loadBalance();
+  showScreen("balance");
+});
+
+document.getElementById("checkout-promo-btn").addEventListener("click", async () => {
+  const input = document.getElementById("checkout-promo-input");
+  const code = input.value.trim();
+  if (!code) return;
+  try {
+    const result = await api("/api/promo/redeem", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    });
+    tg.showAlert(`+ $${result.bonus_amount.toFixed(2)}`);
+    input.value = "";
+    if (selectedPackage) openCheckout(selectedPackage); // обновит проверку баланса с учётом бонуса
+  } catch (e) {
+    tg.showAlert(t("promo_error"));
+  }
+});
 
 let paymentPollTimer = null;
 
@@ -387,17 +430,11 @@ async function payWith(method) {
       method: "POST",
       body: JSON.stringify({ package_id: selectedPackage.id }),
     });
-    const payInit = await api(`/api/orders/${order.order_id}/pay`, {
+    await api(`/api/orders/${order.order_id}/pay`, {
       method: "POST",
       body: JSON.stringify({ method }),
     });
-    if (method === "test" || method === "balance") {
-      // Заказ уже оплачен и отправлен в esimaccess на сервере — никуда переходить не нужно.
-    } else if (method === "wallet_pay") {
-      tg.openTelegramLink(payInit.redirect_url);
-    } else {
-      tg.openLink(payInit.redirect_url);
-    }
+    // Заказ уже оплачен с баланса и отправлен в esimaccess на сервере — никуда переходить не нужно.
     document.getElementById("payment-methods").hidden = true;
     document.getElementById("payment-waiting").hidden = false;
     pollPaymentStatus(order.order_id);
@@ -431,6 +468,7 @@ function pollPaymentStatus(orderId) {
 async function loadBalance() {
   const data = await api("/api/balance");
   document.getElementById("balance-amount").textContent = `$${data.balance.toFixed(2)}`;
+  document.getElementById("topup-oxapay-btn").hidden = !oxapayEnabled;
   document.getElementById("referral-desc").textContent = t("referral_desc").replace("{percent}", data.referral_percent);
   document.getElementById("referral-link-input").value = `https://t.me/${botUsername}?start=${data.referral_code}`;
 
@@ -568,10 +606,6 @@ document.getElementById("profile-help-row").addEventListener("click", () => {
 document.getElementById("topup-idram-btn").addEventListener("click", () => submitTopup("idram"));
 document.getElementById("topup-oxapay-btn").addEventListener("click", () => submitTopup("oxapay"));
 document.getElementById("pay-balance-btn").addEventListener("click", () => payWith("balance"));
-document.getElementById("pay-idram-btn").addEventListener("click", () => payWith("idram"));
-document.getElementById("pay-walletpay-btn").addEventListener("click", () => payWith("wallet_pay"));
-document.getElementById("pay-oxapay-btn").addEventListener("click", () => payWith("oxapay"));
-document.getElementById("pay-test-btn").addEventListener("click", () => payWith("test"));
 
 // --- Мои eSIM ---
 async function loadMyEsims() {
@@ -617,7 +651,18 @@ async function loadMyEsims() {
         ${gb ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_data")}</div><div class="esim-stat-value">${gb} GB</div></div>` : ""}
         ${o.validity_days ? `<div class="esim-stat"><div class="esim-stat-label">${t("stat_validity")}</div><div class="esim-stat-value">${o.validity_days} ${t("days_short")}</div></div>` : ""}
       </div>
-      ${o.qr_code_data ? `<img class="qr-image" src="${o.qr_code_data}" alt="QR">` : ""}
+      ${o.status === "active" && o.data_remaining_mb != null && o.data_amount_mb ? (() => {
+        const usedPct = Math.max(0, Math.min(100, 100 - (o.data_remaining_mb / o.data_amount_mb) * 100));
+        const remainGb = (o.data_remaining_mb / 1024).toFixed(1);
+        return `
+          <div class="usage-bar-wrap">
+            <div class="usage-bar-label">${t("data_left").replace("{gb}", remainGb).replace("{total}", gb)}</div>
+            <div class="usage-bar-track"><div class="usage-bar-fill" style="width:${usedPct}%"></div></div>
+          </div>
+        `;
+      })() : ""}
+      ${o.qr_code_data ? `<img class="qr-image" src="${o.qr_code_data}" alt="QR">
+        <button class="btn secondary qr-download-btn" data-src="${o.qr_code_data}" data-name="esim-${o.id}" style="width:100%; margin-top:8px;">⬇️ ${t("qr_download")}</button>` : ""}
       ${o.activation_instructions ? `<div class="hint">${t("qr_manual_hint")}</div><div class="iccid">${o.activation_instructions}</div>` : ""}
       ${o.iccid ? `<div class="iccid">ICCID: ${o.iccid}</div>` : ""}
       ${o.status === "active" && !o.reviewed ? `
@@ -652,6 +697,28 @@ async function loadMyEsims() {
         } catch (e) {
           reviewBtn.disabled = false;
           tg.showAlert("Error, please try again.");
+        }
+      });
+    }
+    const qrDownloadBtn = card.querySelector(".qr-download-btn");
+    if (qrDownloadBtn) {
+      qrDownloadBtn.addEventListener("click", async () => {
+        try {
+          const src = qrDownloadBtn.dataset.src;
+          const resp = await fetch(src);
+          const blob = await resp.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.download = `${qrDownloadBtn.dataset.name}.png`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+          // Резервный вариант — просто открыть QR в новой вкладке/окне Telegram,
+          // если скачивание blob'ом не сработало (например, из-за CORS у стороннего хоста).
+          tg.openLink(qrDownloadBtn.dataset.src);
         }
       });
     }
@@ -811,12 +878,57 @@ document.getElementById("chat-file-input").addEventListener("change", async (e) 
   }
 });
 
+// --- Онбординг при первом входе ---
+const ONBOARDING_SLIDES_COUNT = 3;
+let onboardingStep = 0;
+
+function showOnboardingSlide(step) {
+  onboardingStep = step;
+  document.querySelectorAll(".onboarding-slide").forEach((el) => {
+    el.hidden = Number(el.dataset.slide) !== step;
+  });
+  document.querySelectorAll(".onboarding-dot").forEach((el) => {
+    el.classList.toggle("active", Number(el.dataset.dot) === step);
+  });
+  document.getElementById("onboarding-next-btn").textContent =
+    step === ONBOARDING_SLIDES_COUNT - 1 ? t("onboarding_start") : t("onboarding_next");
+}
+
+function finishOnboarding() {
+  try {
+    localStorage.setItem("kaline_onboarding_seen", "1");
+  } catch (e) {
+    // localStorage может быть недоступен (приватный режим и т.п.) — не критично,
+    // просто онбординг будет показываться повторно, это не ломает сам продукт.
+  }
+  document.getElementById("onboarding-overlay").hidden = true;
+}
+
+document.getElementById("onboarding-next-btn").addEventListener("click", () => {
+  if (onboardingStep >= ONBOARDING_SLIDES_COUNT - 1) {
+    finishOnboarding();
+  } else {
+    showOnboardingSlide(onboardingStep + 1);
+  }
+});
+document.getElementById("onboarding-skip-btn").addEventListener("click", finishOnboarding);
+
+let onboardingSeen = true;
+try {
+  onboardingSeen = localStorage.getItem("kaline_onboarding_seen") === "1";
+} catch (e) {
+  onboardingSeen = true; // без localStorage лучше не показывать навязчиво при каждом открытии
+}
+
 // --- Старт ---
 setLang(currentLang);
 loadHomeCategories();
-loadRegionBundles();
 refreshNotifBadge();
 showScreen("home");
+if (!onboardingSeen) {
+  document.getElementById("onboarding-overlay").hidden = false;
+  showOnboardingSlide(0);
+}
 
 api("/api/test-payment-enabled")
   .then((res) => {

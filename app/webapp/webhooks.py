@@ -156,17 +156,23 @@ async def _handle_data_usage(session, content: dict) -> None:
     order = await _find_order_by_esim_tran_no(session, content.get("esimTranNo", ""))
     if order is None:
         return
+
+    remain_mb = round(content.get("remain", 0) / 1048576)
+    order.data_remaining_mb = remain_mb
+    await session.commit()
+
+    threshold_pct = int(float(content.get("remainThreshold", 0)) * 100)
+    body = f"Осталось {threshold_pct}% трафика (≈{remain_mb} МБ). Можно оформить докупку в разделе «Мои eSIM»."
+    await notify(
+        session, website_account_id=order.website_account_id, user_id=order.user_id,
+        type=NotificationType.SYSTEM, title="Мало трафика", body=body,
+    )
+
     await session.refresh(order, attribute_names=["user"])
     if order.user is None or not order.user.telegram_id:
         return  # заказ с сайта — уведомлять в Telegram некого, это нормально
-    threshold_pct = int(float(content.get("remainThreshold", 0)) * 100)
-    remain_mb = round(content.get("remain", 0) / 1048576)
     try:
-        await _notify_bot.send_message(
-            chat_id=order.user.telegram_id,
-            text=f"📶 Осталось {threshold_pct}% трафика по твоему eSIM (≈{remain_mb} МБ). "
-                 f"Можно оформить докупку в разделе «Мои eSIM».",
-        )
+        await _notify_bot.send_message(chat_id=order.user.telegram_id, text=f"📶 {body}")
     except Exception:
         pass
 
@@ -175,15 +181,24 @@ async def _handle_validity_usage(session, content: dict) -> None:
     order = await _find_order_by_esim_tran_no(session, content.get("esimTranNo", ""))
     if order is None:
         return
+
+    try:
+        order.validity_days_remaining = int(content.get("remain", 0))
+    except (TypeError, ValueError):
+        pass
+    await session.commit()
+
+    body = f"Срок действия истекает через {content.get('remain', '?')} дн. После истечения докупить данные будет нельзя — оформи новый пакет заранее."
+    await notify(
+        session, website_account_id=order.website_account_id, user_id=order.user_id,
+        type=NotificationType.SYSTEM, title="Заканчивается срок действия", body=body,
+    )
+
     await session.refresh(order, attribute_names=["user"])
     if order.user is None or not order.user.telegram_id:
         return  # заказ с сайта — уведомлять в Telegram некого, это нормально
     try:
-        await _notify_bot.send_message(
-            chat_id=order.user.telegram_id,
-            text=f"⏳ Срок действия твоего eSIM истекает через {content.get('remain', '?')} дн. "
-                 f"После истечения докупить данные будет нельзя — оформи новый пакет заранее.",
-        )
+        await _notify_bot.send_message(chat_id=order.user.telegram_id, text=f"⏳ {body}")
     except Exception:
         pass
 

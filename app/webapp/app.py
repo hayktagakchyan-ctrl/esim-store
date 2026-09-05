@@ -16,7 +16,7 @@ import uuid
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.config import settings
@@ -99,13 +99,40 @@ app.include_router(shop.router)
 @app.get("/api/countries")
 async def list_countries():
     async with get_session() as session:
+        latest_per_code = (
+            select(Package.country_code, func.max(Package.updated_at).label("max_updated"))
+            .where(Package.is_active.is_(True), Package.is_regional.is_(False))
+            .group_by(Package.country_code)
+            .subquery()
+        )
         result = await session.execute(
             select(Package.country_code, Package.country_name)
-            .where(Package.is_active.is_(True))
+            .join(
+                latest_per_code,
+                (Package.country_code == latest_per_code.c.country_code)
+                & (Package.updated_at == latest_per_code.c.max_updated),
+            )
             .distinct()
+            .order_by(Package.country_name)
         )
         rows = result.all()
-    return [{"code": code, "name": name} for code, name in rows]
+
+        rating_rows = (
+            await session.execute(
+                select(Review.country_code, func.avg(Review.rating), func.count(Review.id))
+                .group_by(Review.country_code)
+            )
+        ).all()
+        ratings = {code: (round(float(avg), 1), count) for code, avg, count in rating_rows}
+
+    return [
+        {
+            "code": code, "name": name,
+            "avg_rating": ratings.get(code, (None, 0))[0],
+            "review_count": ratings.get(code, (None, 0))[1],
+        }
+        for code, name in rows
+    ]
 
 
 @app.get("/api/regions")
@@ -228,6 +255,8 @@ async def my_orders(user: User = Depends(get_current_user)):
                 "price": float(o.price_charged),
                 "currency": o.currency,
                 "reviewed": o.id in reviewed_order_ids,
+                "data_remaining_mb": o.data_remaining_mb,
+                "validity_days_remaining": o.validity_days_remaining,
             }
             for o in orders
         ],

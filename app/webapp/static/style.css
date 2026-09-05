@@ -45,13 +45,13 @@
 /* Тёмная тема — глубокий navy (не чистый чёрный, ближе к "deep space" из брифа),
    переключается через data-theme на <html>, см. applyTheme() в app.js. */
 [data-theme="dark"] {
-  --bg: #0A0B14;
-  --surface: #141628;
-  --surface-secondary: #1D2038;
-  --border: #2B2E4A;
+  --bg: #18230F;
+  --surface: #1E2B15;
+  --surface-secondary: #243318;
+  --border: #2E4020;
   --text: #F5F6FA;
-  --text-secondary: #9799B5;
-  --text-tertiary: #5C5F80;
+  --text-secondary: #9BAE92;
+  --text-tertiary: #6B7D62;
   --accent: #1F7D53;
   --accent-gradient: linear-gradient(135deg, #255F38 0%, #1F7D53 100%);
   --danger: #FF453A;
@@ -382,6 +382,12 @@ main.screen[hidden] { display: none !important; }
 
 /* --- Сетка статистики (данные / срок) — как Price/Market Cap в референсе --- */
 .esim-stat-grid { display: flex; gap: 8px; margin-top: 12px; }
+
+/* --- Полоска остатка трафика --- */
+.usage-bar-wrap { margin-top: 12px; }
+.usage-bar-label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+.usage-bar-track { height: 8px; border-radius: 999px; background: var(--surface-secondary); overflow: hidden; }
+.usage-bar-fill { height: 100%; border-radius: 999px; background: var(--accent-gradient); }
 .esim-stat {
   flex: 1;
   background: var(--surface-secondary);
@@ -518,6 +524,28 @@ main.screen[hidden] { display: none !important; }
   z-index: 50;
 }
 .floating-chat-btn:active { transform: scale(0.94); }
+
+/* --- Онбординг при первом входе --- */
+.onboarding-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  padding: 32px 24px;
+  text-align: center;
+}
+.onboarding-slide { max-width: 320px; }
+.onboarding-emoji { font-size: 64px; margin-bottom: 24px; }
+.onboarding-slide h2 { font-size: 22px; font-weight: 700; margin: 0 0 12px; }
+.onboarding-slide p { font-size: 15px; color: var(--text-secondary); margin: 0; line-height: 1.5; }
+.onboarding-dots { display: flex; gap: 8px; margin-top: 32px; }
+.onboarding-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--surface-secondary); }
+.onboarding-dot.active { background: var(--accent-gradient); width: 22px; border-radius: 999px; }
+.onboarding-actions {
+  position: absolute; bottom: 40px; left: 24px; right: 24px;
+  display: flex; gap: 10px;
+}
+.onboarding-actions .btn.secondary { flex: 1; }
+.onboarding-actions .primary-btn { flex: 2; }
 
 /* --- Бейдж непрочитанных уведомлений на колокольчике --- */
 .icon-btn { position: relative; }

@@ -156,7 +156,20 @@ async def _fetch_country_list(session):
         .distinct()
         .order_by(Package.country_name)
     )
-    return [{"code": c, "name": n} for c, n in result.all()]
+    rows = result.all()
+
+    rating_rows = (
+        await session.execute(
+            select(Review.country_code, func.avg(Review.rating), func.count(Review.id))
+            .group_by(Review.country_code)
+        )
+    ).all()
+    ratings = {code: (round(float(avg), 1), count) for code, avg, count in rating_rows}
+
+    return [
+        {"code": c, "name": n, "avg_rating": ratings.get(c, (None, 0))[0], "review_count": ratings.get(c, (None, 0))[1]}
+        for c, n in rows
+    ]
 
 
 async def _fetch_region_list(session):
@@ -242,10 +255,63 @@ async def shop_checkout_form(request: Request, package_id: int):
 
     return await render(
         request, "checkout.html", package=package, error=None,
-        test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
-        oxapay_enabled=settings.ENABLE_OXAPAY,
         balance=db_account.balance,
         can_pay_from_balance=float(db_account.balance) >= float(package.sell_price),
+    )
+
+
+@router.post("/shop/checkout/{package_id}/promo", response_class=HTMLResponse)
+async def shop_checkout_promo(request: Request, package_id: int, code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    code = code.strip().upper()
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        db_account = await session.get(WebsiteAccount, account.id)
+        promo = (await session.execute(select(PromoCode).where(PromoCode.code == code))).scalar_one_or_none()
+
+        error = None
+        bonus_amount = None
+        if promo is None or not promo.is_active:
+            error = "promo_not_found"
+        elif promo.expires_at and promo.expires_at < datetime.utcnow():
+            error = "promo_expired"
+        elif promo.max_uses is not None and promo.used_count >= promo.max_uses:
+            error = "promo_limit"
+        else:
+            already = (
+                await session.execute(
+                    select(PromoCodeRedemption).where(
+                        PromoCodeRedemption.promo_code_id == promo.id,
+                        PromoCodeRedemption.website_account_id == account.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                error = "promo_used"
+            else:
+                db_account.balance = round(db_account.balance + promo.bonus_amount, 2)
+                promo.used_count += 1
+                session.add(PromoCodeRedemption(promo_code_id=promo.id, website_account_id=account.id))
+                await session.commit()
+                bonus_amount = promo.bonus_amount
+                await notify(
+                    session, website_account_id=account.id, type=NotificationType.PAYMENT,
+                    title="Промокод активирован",
+                    body=f"На баланс зачислено ${promo.bonus_amount:.2f} по промокоду {code}.",
+                )
+
+        balance_now = db_account.balance
+
+    return await render(
+        request, "checkout.html", package=package, error=None,
+        balance=balance_now, can_pay_from_balance=float(balance_now) >= float(package.sell_price),
+        promo_error=error, promo_success=bonus_amount,
     )
 
 
@@ -255,30 +321,22 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
     if account is None:
         return require_login_redirect(request)
 
-    if method not in ("idram", "oxapay", "test", "balance"):
-        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
-    if method == "test" and not settings.ENABLE_TEST_PAYMENT:
-        # Проверка и на сервере, не только скрытая кнопка в интерфейсе — на случай
-        # прямого обращения к этому адресу в обход формы.
-        raise HTTPException(status_code=403, detail="Тестовая оплата отключена")
-    if method == "oxapay" and not settings.ENABLE_OXAPAY:
-        raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+    if method != "balance":
+        raise HTTPException(status_code=403, detail="Оплата заказов сейчас доступна только с баланса")
 
     async with get_session() as session:
         package = await session.get(Package, package_id)
         if package is None:
             raise HTTPException(status_code=404, detail="Пакет не найден")
 
-        if method == "balance":
-            db_account = await session.get(WebsiteAccount, account.id)
-            if db_account.balance < float(package.sell_price):
-                return await render(
-                    request, "checkout.html", package=package,
-                    error="На балансе недостаточно средств — пополни его в «Мой баланс».",
-                    test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
-                    oxapay_enabled=settings.ENABLE_OXAPAY, balance=db_account.balance,
-                    can_pay_from_balance=False,
-                )
+        db_account = await session.get(WebsiteAccount, account.id)
+        if db_account.balance < float(package.sell_price):
+            return await render(
+                request, "checkout.html", package=package,
+                error="На балансе недостаточно средств — пополни его в «Мой баланс».",
+                balance=db_account.balance,
+                can_pay_from_balance=False,
+            )
 
         order = Order(
             user_id=None,
@@ -295,65 +353,20 @@ async def shop_checkout_submit(request: Request, package_id: int, method: str = 
         await session.refresh(order)
 
         external_id = str(uuid.uuid4())
-        provider = {
-            "idram": PaymentProvider.IDRAM,
-            "oxapay": PaymentProvider.OXAPAY,
-            "test": PaymentProvider.TEST,
-            "balance": PaymentProvider.BALANCE,
-        }[method]
         payment = Payment(
             order_id=order.id,
-            provider=provider,
-            status=PaymentStatus.PENDING,
+            provider=PaymentProvider.BALANCE,
+            status=PaymentStatus.PAID,
             amount=order.price_charged,
             currency=order.currency,
             external_payment_id=external_id,
         )
-
-        if method == "idram":
-            session.add(payment)
-            await session.commit()
-            redirect_url = f"/pay/idram/{external_id}"
-        elif method == "oxapay":
-            try:
-                invoice = await oxapay_client.create_invoice(
-                    amount=float(order.price_charged),
-                    currency=order.currency,
-                    order_id=external_id,
-                    description=f"Заказ №{order.id}",
-                    callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
-                    return_url=f"{settings.PUBLIC_BASE_URL}/shop/order/{order.guest_token}",
-                )
-            except OxaPayError as exc:
-                current_balance = (await session.get(WebsiteAccount, account.id)).balance
-                return await render(
-                    request, "checkout.html", package=package,
-                    error=f"Платёжная система временно недоступна: {exc}",
-                    test_payment_enabled=settings.ENABLE_TEST_PAYMENT,
-                    oxapay_enabled=settings.ENABLE_OXAPAY, balance=current_balance,
-                    can_pay_from_balance=float(current_balance) >= float(package.sell_price),
-                )
-            payment.provider_order_id = invoice["track_id"]
-            payment.pay_link = invoice["payment_url"]
-            session.add(payment)
-            await session.commit()
-            redirect_url = invoice["payment_url"]
-        elif method == "balance":
-            db_account = await session.get(WebsiteAccount, account.id)
-            db_account.balance = round(db_account.balance - float(order.price_charged), 2)
-            payment.status = PaymentStatus.PAID
-            session.add(payment)
-            order.status = OrderStatus.PAID
-            await session.commit()
-            await _fulfill_order(session, order)
-            redirect_url = f"/shop/order/{order.guest_token}"
-        else:  # test — уже проверили выше, что settings.ENABLE_TEST_PAYMENT включён
-            payment.status = PaymentStatus.PAID
-            session.add(payment)
-            order.status = OrderStatus.PAID
-            await session.commit()
-            await _fulfill_order(session, order)
-            redirect_url = f"/shop/order/{order.guest_token}"
+        db_account.balance = round(db_account.balance - float(order.price_charged), 2)
+        session.add(payment)
+        order.status = OrderStatus.PAID
+        await session.commit()
+        await _fulfill_order(session, order)
+        redirect_url = f"/shop/order/{order.guest_token}"
 
     return RedirectResponse(url=redirect_url, status_code=303)
 

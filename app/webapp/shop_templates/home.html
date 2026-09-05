@@ -67,7 +67,7 @@
       <span class="flag">{{ c.code|flag }}</span>
       <div>
         <div class="name">{{ c.name }}</div>
-        <div class="price">{{ c.code }}</div>
+        <div class="price">{% if c.review_count %}★ {{ c.avg_rating }}{% endif %}</div>
       </div>
     </a>
     {% else %}

@@ -29,12 +29,26 @@ const I18N = {
   stat_data: { ru: "Данные", hy: "Տվյալներ", en: "Data" },
   stat_validity: { ru: "Срок", hy: "Ժամկետ", en: "Validity" },
   days_short: { ru: "дн.", hy: "օր", en: "days" },
+  data_left: { ru: "Осталось {gb} ГБ из {total} ГБ", hy: "Մնացել է {gb} ԳԲ {total} ԳԲ-ից", en: "{gb} GB left of {total} GB" },
+  qr_download: { ru: "Скачать QR-код", hy: "Ներբեռնել QR-կոդը", en: "Download QR code" },
+
+  onboarding_1_title: { ru: "Интернет в любой стране", hy: "Ինտերնետ ցանկացած երկրում", en: "Internet in any country" },
+  onboarding_1_desc: { ru: "eSIM для более чем 100 стран — без походов в салон связи и без роуминга.", hy: "eSIM ավելի քան 100 երկրների համար — առանց ռոումինգի։", en: "eSIM for 100+ countries — no roaming, no store visits." },
+  onboarding_2_title: { ru: "Выбери страну и тариф", hy: "Ընտրիր երկիրը և փաթեթը", en: "Pick a country and plan" },
+  onboarding_2_desc: { ru: "QR-код появляется сразу после оплаты — активируй перед вылетом.", hy: "QR-կոդը հայտնվում է վճարումից անմիջապես հետո։", en: "QR code appears right after payment — activate before you fly." },
+  onboarding_3_title: { ru: "Оплата с баланса", hy: "Վճարում հաշվից", en: "Pay from your balance" },
+  onboarding_3_desc: { ru: "Пополняй баланс удобным способом и оплачивай заказы мгновенно.", hy: "Համալրիր հաշիվը և վճարիր ակնթարթորեն։", en: "Top up your balance and pay for orders instantly." },
+  onboarding_skip: { ru: "Пропустить", hy: "Բաց թողնել", en: "Skip" },
+  onboarding_next: { ru: "Далее", hy: "Հաջորդը", en: "Next" },
+  onboarding_start: { ru: "Начать", hy: "Սկսել", en: "Get started" },
 
   nav_balance: { ru: "Мой баланс", hy: "Իմ հաշիվը", en: "My balance" },
   balance_current: { ru: "Текущий баланс", hy: "Ընթացիկ մնացորդ", en: "Current balance" },
   balance_topup_title: { ru: "Пополнить баланс", hy: "Համալրել հաշիվը", en: "Top up balance" },
   balance_amount_label: { ru: "Введи сумму, $", hy: "Մուտքագրիր գումարը, $", en: "Enter amount, $" },
   checkout_pay_balance: { ru: "Оплатить с баланса", hy: "Վճարել հաշվից", en: "Pay from balance" },
+  checkout_insufficient_balance: { ru: "Недостаточно средств на балансе", hy: "Հաշվին բավարար միջոցներ չկան", en: "Not enough balance" },
+  checkout_topup_cta: { ru: "Пополнить баланс", hy: "Համալրել հաշիվը", en: "Top up balance" },
 
   referral_title: { ru: "Пригласи друга", hy: "Հրավիրիր ընկերոջ", en: "Invite a friend" },
   referral_desc: {
@@ -45,6 +59,7 @@ const I18N = {
 
   filter_all: { ru: "Все", hy: "Բոլորը", en: "All" },
   filter_favorites: { ru: "★ Избранное", hy: "★ Ընտրյալներ", en: "★ Favorites" },
+  filter_regions: { ru: "🌐 Регионы", hy: "🌐 Տարածաշրջաններ", en: "🌐 Regions" },
   favorite_add: { ru: "В избранное", hy: "Ավելացնել ընտրյալներում", en: "Add to favorites" },
   favorite_remove: { ru: "Убрать из избранного", hy: "Հեռացնել ընտրյալներից", en: "Remove from favorites" },
 

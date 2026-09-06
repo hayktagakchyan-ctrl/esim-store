@@ -180,9 +180,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "status_refunded": {"ru": "Возврат оформлен", "hy": "Վերադարձը կատարված է", "en": "Refunded"},
 
     "footer_bot_teaser": {
-        "ru": "Также в нашем Telegram-боте: доступ в лаунж-зоны аэропортов и туры.",
-        "hy": "Նաև մեր Telegram-բոտում՝ օդանավակայանի լաունջ հասանելիություն և տուրեր։",
-        "en": "Also in our Telegram bot: airport lounge access and tours.",
+        "ru": "Твой цифровой роуминг — eSIM, доступ в лаунж-зоны и туры в одном месте.",
+        "hy": "Քո թվային ռոումինգը՝ eSIM, լաունջ հասանելիություն և տուրեր մեկ վայրում։",
+        "en": "Your digital roaming — eSIM, lounge access and tours in one place.",
     },
 
     "footer_privacy_link": {"ru": "Политика конфиденциальности", "hy": "Գաղտնիության քաղաքականություն", "en": "Privacy Policy"},
@@ -210,7 +210,7 @@ eSIM. Мы не продаём и не передаём твои данные н
 <p><strong>Сколько храним.</strong> Пока существует твой аккаунт, либо пока это требуется по
 закону (например, для бухгалтерского учёта).</p>
 <p><strong>Твои права.</strong> Можешь запросить удаление аккаунта и своих данных — напиши в
-поддержку через бот.</p>
+поддержку через сайт.</p>
 """,
         "hy": """
 <p><strong>Ինչ տվյալներ ենք հավաքում։</strong> Էլ. փոստ և գաղտնաբառ (պահվում է ոչ
@@ -398,9 +398,9 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
     },
     "faq_q3": {"ru": "Что если оплата прошла, а eSIM не пришёл?", "hy": "Իսկ եթե վճարումը եղավ, բայց eSIM-ը չեկա՞վ", "en": "What if I paid but didn't receive the eSIM?"},
     "faq_a3": {
-        "ru": "Напиши нам в поддержку прямо на сайте (кнопка в шапке) или в Telegram-боте — разберёмся быстро.",
-        "hy": "Գրիր մեզ աջակցությանը կայքում (կոճակը վերևում) կամ Telegram-բոտում — արագ կլուծենք։",
-        "en": "Message support right here on the site (button in the header) or via the Telegram bot — we'll sort it out fast.",
+        "ru": "Напиши нам в поддержку прямо на сайте (кнопка в шапке) — разберёмся быстро.",
+        "hy": "Գրիր մեզ աջակցությանը կայքում (կոճակը վերևում) — արագ կլուծենք։",
+        "en": "Message support right here on the site (button in the header) — we'll sort it out fast.",
     },
     "faq_q4": {"ru": "На каких устройствах работает eSIM?", "hy": "Ո՞ր սարքերում է աշխատում eSIM-ը", "en": "Which devices support eSIM?"},
     "faq_a4": {

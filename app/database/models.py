@@ -485,6 +485,27 @@ class Review(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ReferralBonus(Base):
+    """
+    Запись о выплаченном реферальном бонусе — раньше сумма просто прибавлялась
+    к балансу рефери без отдельной записи (см. maybe_credit_referral_bonus в
+    app/webapp/payments.py), поэтому старые начисления (до появления этой
+    таблицы) тут не видны — только новые, начиная с этого момента.
+    """
+    __tablename__ = "referral_bonuses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # Кто получил бонус (реферер) — ЛИБО аккаунт сайта, ЛИБО пользователь бота.
+    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    # Кто был приглашён (реферал) и чей заказ вызвал начисление.
+    referred_website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), nullable=True)
+    referred_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
+    amount: Mapped[float] = mapped_column(Numeric(10, 2))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
 class Favorite(Base):
     """Избранные страны — просто список кодов стран на аккаунт. Владелец —
     ЛИБО аккаунт сайта, ЛИБО пользователь бота (ровно один из двух)."""
@@ -553,4 +574,27 @@ class Notification(Base):
     # (create_all() новые колонки в старых таблицах не добавляет).
     link_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+class AdminRole(str, enum.Enum):
+    FULL = "full"        # видит и может всё, включая правку баланса и управление другими админами
+    SUPPORT = "support"  # всё, кроме правки баланса пользователей
+
+
+class AdminUser(Base):
+    """
+    Учётка для входа в админ-панель — до этого был единственный логин/пароль
+    из настроек (ADMIN_PANEL_LOGIN/PASSWORD), теперь можно завести несколько
+    админов с разными правами. Логин из настроек по-прежнему работает как
+    раньше (см. require_login в admin_panel/app.py) — это ДОПОЛНИТЕЛЬНЫЙ способ
+    входа, а не замена, чтобы не потерять доступ, если случайно удалишь всех
+    остальных или забудешь пароль от одного из них.
+    """
+    __tablename__ = "admin_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    login: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[AdminRole] = mapped_column(Enum(AdminRole), default=AdminRole.SUPPORT)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

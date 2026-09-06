@@ -21,12 +21,13 @@ from app.database.db import get_session, init_db
 from app.database.models import (
     Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode,
     ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
-    Notification, NotificationType,
+    Notification, NotificationType, AdminUser, AdminRole, ReferralBonus, Review,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.payments import _fulfill_order, notify
 from app.webapp.uploads import save_service_file
+from app.webapp.shop_auth import hash_password, verify_password
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -66,7 +67,17 @@ async def security_headers(request: Request, call_next):
 
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-templates = Jinja2Templates(directory=BASE_DIR / "templates")
+def _admin_template_context(request: Request) -> dict:
+    """Доступно во ВСЕХ шаблонах без явной передачи — текущая роль вошедшего
+    админа, чтобы прятать/показывать то, что зависит от прав (напр. правку
+    баланса — см. users_list.html)."""
+    return {
+        "is_full_admin": request.session.get("admin_role", AdminRole.FULL.value) == AdminRole.FULL.value,
+        "admin_login": request.session.get("admin_login", settings.ADMIN_PANEL_LOGIN),
+    }
+
+
+templates = Jinja2Templates(directory=BASE_DIR / "templates", context_processors=[_admin_template_context])
 
 # (label, число закрашенных "делений сигнала" из 4, css-класс цвета) — используется в таблице заказов
 STATUS_META = {
@@ -84,6 +95,14 @@ templates.env.globals["OrderStatus"] = OrderStatus
 def require_login(request: Request) -> None:
     if not request.session.get("authenticated"):
         raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+def require_full_admin(request: Request) -> None:
+    """Для действий, которые нельзя доверять роли 'support' — сейчас это только
+    правка баланса и управление другими админами."""
+    require_login(request)
+    if request.session.get("admin_role", AdminRole.FULL.value) != AdminRole.FULL.value:
+        raise HTTPException(status_code=403, detail="Недостаточно прав — нужен полный доступ")
 
 
 @app.exception_handler(HTTPException)
@@ -109,7 +128,21 @@ async def login_submit(request: Request, login: str = Form(...), password: str =
     if login == settings.ADMIN_PANEL_LOGIN and password == settings.ADMIN_PANEL_PASSWORD:
         reset_rate_limit(rate_key)
         request.session["authenticated"] = True
-        return RedirectResponse(url="/orders", status_code=302)
+        request.session["admin_role"] = AdminRole.FULL.value
+        request.session["admin_login"] = login
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    async with get_session() as session:
+        admin = (await session.execute(
+            select(AdminUser).where(AdminUser.login == login, AdminUser.is_active.is_(True))
+        )).scalar_one_or_none()
+
+    if admin is not None and verify_password(password, admin.password_hash):
+        reset_rate_limit(rate_key)
+        request.session["authenticated"] = True
+        request.session["admin_role"] = admin.role.value
+        request.session["admin_login"] = admin.login
+        return RedirectResponse(url="/dashboard", status_code=302)
 
     register_failure(rate_key)
     return templates.TemplateResponse(
@@ -197,6 +230,33 @@ async def dashboard(request: Request, _=Depends(require_login)):
             else:
                 r.customer_label = "—"
 
+        # Реферальная программа — сколько всего пришло по ссылкам и сколько
+        # бонусов реально начислено (только с момента появления ReferralBonus,
+        # см. комментарий в database/models.py — старые начисления не видны).
+        referred_site = (await session.execute(
+            select(func.count()).select_from(WebsiteAccount).where(WebsiteAccount.referred_by_id.is_not(None))
+        )).scalar_one()
+        referred_bot = (await session.execute(
+            select(func.count()).select_from(User).where(User.referred_by_id.is_not(None))
+        )).scalar_one()
+        bonuses = list((await session.execute(select(ReferralBonus).order_by(ReferralBonus.created_at.desc()))).scalars())
+        bonuses_total = sum(float(b.amount) for b in bonuses)
+        recent_bonuses = bonuses[:10]
+        for b in recent_bonuses:
+            if b.website_account_id:
+                acc = await session.get(WebsiteAccount, b.website_account_id)
+                b.referrer_label = acc.email if acc else "—"
+            elif b.user_id:
+                bu = await session.get(User, b.user_id)
+                b.referrer_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
+            else:
+                b.referrer_label = "—"
+
+        # Отзывы — просто сводка тут, полный список с удалением на /reviews.
+        reviews = list((await session.execute(select(Review))).scalars())
+        reviews_count = len(reviews)
+        reviews_avg = (sum(r.rating for r in reviews) / reviews_count) if reviews_count else 0
+
     return templates.TemplateResponse(
         "dashboard.html",
         {
@@ -211,6 +271,11 @@ async def dashboard(request: Request, _=Depends(require_login)):
             "top_countries": top_countries,
             "recent_orders": recent_orders,
             "recent_services": recent_services,
+            "referred_total": referred_site + referred_bot,
+            "bonuses_total": bonuses_total,
+            "recent_bonuses": recent_bonuses,
+            "reviews_count": reviews_count,
+            "reviews_avg": reviews_avg,
         },
     )
 
@@ -951,7 +1016,7 @@ async def users_list(request: Request, q: str = "", _=Depends(require_login)):
 
 @app.post("/users/bot/{user_id}/balance")
 async def bot_user_balance_update(
-    request: Request, user_id: int, balance: float = Form(...), _=Depends(require_login)
+    request: Request, user_id: int, balance: float = Form(...), _=Depends(require_full_admin)
 ):
     async with get_session() as session:
         user = await session.get(User, user_id)
@@ -964,7 +1029,7 @@ async def bot_user_balance_update(
 
 @app.post("/users/site/{account_id}/balance")
 async def site_account_balance_update(
-    request: Request, account_id: int, balance: float = Form(...), _=Depends(require_login)
+    request: Request, account_id: int, balance: float = Form(...), _=Depends(require_full_admin)
 ):
     async with get_session() as session:
         account = await session.get(WebsiteAccount, account_id)
@@ -1174,3 +1239,79 @@ async def service_request_cancel(request_id: int, admin_note: str = Form(""), _=
         sr.admin_note = admin_note.strip() or sr.admin_note
         await session.commit()
     return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Другие админы (AdminUser) — см. комментарий в database/models.py. Доступно
+# только полному админу (require_full_admin) — иначе support мог бы себе же
+# выдать полный доступ.
+# ---------------------------------------------------------------------------
+
+@app.get("/admins", response_class=HTMLResponse)
+async def admins_list(request: Request, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admins = list((await session.execute(select(AdminUser).order_by(AdminUser.created_at.desc()))).scalars())
+    return templates.TemplateResponse("admins_list.html", {"request": request, "admins": admins})
+
+
+@app.post("/admins/new")
+async def admin_create(
+    login: str = Form(...), password: str = Form(...), role: str = Form(...), _=Depends(require_full_admin)
+):
+    async with get_session() as session:
+        existing = (await session.execute(select(AdminUser).where(AdminUser.login == login.strip()))).scalar_one_or_none()
+        if existing is None:
+            session.add(AdminUser(
+                login=login.strip(), password_hash=hash_password(password), role=AdminRole(role),
+            ))
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+@app.post("/admins/{admin_id}/toggle")
+async def admin_toggle(admin_id: int, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admin = await session.get(AdminUser, admin_id)
+        if admin is not None:
+            admin.is_active = not admin.is_active
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+@app.post("/admins/{admin_id}/delete")
+async def admin_delete(admin_id: int, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admin = await session.get(AdminUser, admin_id)
+        if admin is not None:
+            await session.delete(admin)
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+# --- Отзывы (Review) — просмотр и удаление спама/оскорблений ---
+
+@app.get("/reviews", response_class=HTMLResponse)
+async def reviews_list(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        reviews = list((await session.execute(select(Review).order_by(Review.created_at.desc()))).scalars())
+        for r in reviews:
+            if r.website_account_id:
+                acc = await session.get(WebsiteAccount, r.website_account_id)
+                r.owner_label = acc.email if acc else "—"
+            elif r.user_id:
+                bu = await session.get(User, r.user_id)
+                r.owner_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
+            else:
+                r.owner_label = "—"
+
+    return templates.TemplateResponse("reviews_list.html", {"request": request, "reviews": reviews})
+
+
+@app.post("/reviews/{review_id}/delete")
+async def review_delete(review_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        review = await session.get(Review, review_id)
+        if review is not None:
+            await session.delete(review)
+            await session.commit()
+    return RedirectResponse(url="/reviews", status_code=302)

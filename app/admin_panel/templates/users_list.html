@@ -12,6 +12,8 @@
     <a href="/promo-codes">Промокоды</a>
     <a href="/users" class="active">Пользователи</a>
     <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
   </nav>
   <a class="logout" href="/logout">Выйти</a>
 </div>
@@ -52,11 +54,15 @@
         <td>{{ u.full_name or "—" }}</td>
         <td class="status-label">{{ "да" if u.referral_bonus_paid else "нет" }}</td>
         <td colspan="2">
+          {% if is_full_admin %}
           <form method="post" action="/users/bot/{{ u.id }}/balance?q={{ q }}" class="field-row" style="margin-bottom:0; align-items:center;">
             <input type="number" step="0.01" name="balance" value="{{ '%.2f'|format(u.balance) }}"
                    style="width:110px; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
             <button class="btn" type="submit" style="padding:8px 14px;">Сохранить</button>
           </form>
+          {% else %}
+          <span class="mono">${{ "%.2f"|format(u.balance) }}</span>
+          {% endif %}
         </td>
       </tr>
       {% else %}
@@ -85,11 +91,15 @@
         <td class="status-label">{{ "да" if a.is_verified else "нет" }}</td>
         <td class="status-label">{{ a.created_at.strftime("%d.%m.%Y") }}</td>
         <td colspan="2">
+          {% if is_full_admin %}
           <form method="post" action="/users/site/{{ a.id }}/balance?q={{ q }}" class="field-row" style="margin-bottom:0; align-items:center;">
             <input type="number" step="0.01" name="balance" value="{{ '%.2f'|format(a.balance) }}"
                    style="width:110px; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
             <button class="btn" type="submit" style="padding:8px 14px;">Сохранить</button>
           </form>
+          {% else %}
+          <span class="mono">${{ "%.2f"|format(a.balance) }}</span>
+          {% endif %}
         </td>
       </tr>
       {% else %}

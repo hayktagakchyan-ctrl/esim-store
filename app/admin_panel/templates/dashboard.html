@@ -12,6 +12,8 @@
     <a href="/promo-codes">Промокоды</a>
     <a href="/users">Пользователи</a>
     <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
   </nav>
   <a class="logout" href="/logout">Выйти</a>
 </div>
@@ -34,6 +36,16 @@
       <div class="label">Покупателей (примерно)</div>
       <div style="font-size:28px; font-weight:700; margin-top:6px;">{{ customers_count }}</div>
       <div class="status-label" style="margin-top:4px;">сайт + бот + гости, без дедупликации между ними</div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="label">Рефералов пришло</div>
+      <div style="font-size:28px; font-weight:700; margin-top:6px;">{{ referred_total }}</div>
+      <div class="status-label" style="margin-top:4px;">начислено бонусов: ${{ "%.2f"|format(bonuses_total) }}</div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="label">Отзывы</div>
+      <div style="font-size:28px; font-weight:700; margin-top:6px;">{{ reviews_count }} {% if reviews_count %}· ★{{ "%.1f"|format(reviews_avg) }}{% endif %}</div>
+      <div class="status-label" style="margin-top:4px;"><a href="/reviews" class="status-label">смотреть все →</a></div>
     </div>
   </div>
 
@@ -107,6 +119,21 @@
       </tr>
       {% else %}
       <tr><td colspan="5" class="status-label">Оплаченных услуг пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <h3 style="margin-top:32px;">Последние реферальные начисления</h3>
+  <table>
+    <thead><tr><th>Реферер</th><th>Сумма</th><th>Дата</th></tr></thead>
+    <tbody>
+      {% for b in recent_bonuses %}
+      <tr class="no-click">
+        <td>{{ b.referrer_label }}</td>
+        <td class="mono">${{ "%.2f"|format(b.amount) }}</td>
+        <td class="status-label">{{ b.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="status-label">Пока нет начислений с момента введения учёта.</td></tr>
       {% endfor %}
     </tbody>
   </table>

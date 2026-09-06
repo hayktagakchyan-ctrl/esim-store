@@ -26,7 +26,7 @@ from app.config import settings
 from app.database.db import get_session
 from app.database.models import (
     Order, OrderStatus, Payment, PaymentProvider, PaymentStatus, User, TopUp, WebsiteAccount,
-    Notification, NotificationType,
+    Notification, NotificationType, ReferralBonus,
 )
 from app.services.esimaccess import esimaccess_client
 from app.services.payments import idram
@@ -161,6 +161,13 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
     bonus = round(float(order.price_charged) * REFERRAL_BONUS_PERCENT / 100, 2)
     referrer.balance = round(referrer.balance + bonus, 2)
     account.referral_bonus_paid = True
+    session.add(ReferralBonus(
+        website_account_id=(account.referred_by_id if model is WebsiteAccount else None),
+        user_id=(account.referred_by_id if model is User else None),
+        referred_website_account_id=(owner_id if model is WebsiteAccount else None),
+        referred_user_id=(owner_id if model is User else None),
+        order_id=order.id, amount=bonus,
+    ))
     await session.commit()
 
     ref_website_id = account.referred_by_id if model is WebsiteAccount else None

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Админы — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/dashboard">Дашборд</a>
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    <a href="/admins" class="active">Админы</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Другие админы</h2>
+  <p class="status-label" style="margin-bottom:20px;">
+    Твой основной логин (из настроек хостинга) всегда полный и не отображается здесь.
+    «Support» видит и делает всё, кроме правки баланса пользователей.
+  </p>
+
+  <table>
+    <thead>
+      <tr><th>Логин</th><th>Роль</th><th>Активен</th><th>Создан</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for a in admins %}
+      <tr class="no-click">
+        <td class="mono">{{ a.login }}</td>
+        <td class="status-label">{{ "Полный" if a.role.value == "full" else "Support" }}</td>
+        <td class="status-label">{{ "да" if a.is_active else "нет" }}</td>
+        <td class="status-label">{{ a.created_at.strftime("%d.%m.%Y") }}</td>
+        <td style="display:flex; gap:6px;">
+          <form method="post" action="/admins/{{ a.id }}/toggle" style="margin:0;">
+            <button class="btn secondary" type="submit" style="padding:6px 12px; font-size:12px;">{{ "Выключить" if a.is_active else "Включить" }}</button>
+          </form>
+          <form method="post" action="/admins/{{ a.id }}/delete" onsubmit="return confirm('Удалить админа?');" style="margin:0;">
+            <button class="btn danger" type="submit" style="padding:6px 12px; font-size:12px;">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="status-label">Пока нет дополнительных админов.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:24px; max-width:420px;">
+    <div class="label" style="margin-bottom:12px;">Добавить админа</div>
+    <form method="post" action="/admins/new">
+      <div class="field">
+        <div class="label">Логин</div>
+        <input type="text" name="login" required>
+      </div>
+      <div class="field">
+        <div class="label">Пароль</div>
+        <input type="text" name="password" required>
+      </div>
+      <div class="field">
+        <div class="label">Роль</div>
+        <select name="role">
+          <option value="support" selected>Support (без правки баланса)</option>
+          <option value="full">Полный доступ</option>
+        </select>
+      </div>
+      <button class="btn" type="submit">Добавить</button>
+    </form>
+  </div>
+</div>
+<style>.no-click { cursor: default !important; }</style>
+{% endblock %}

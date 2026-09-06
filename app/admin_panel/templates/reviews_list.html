@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Отзывы — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/dashboard">Дашборд</a>
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+    <a href="/reviews" class="active">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Отзывы ({{ reviews|length }})</h2>
+
+  <table>
+    <thead>
+      <tr><th>Автор</th><th>Страна</th><th>Оценка</th><th>Текст</th><th>Заказ</th><th>Дата</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for r in reviews %}
+      <tr class="no-click">
+        <td>{{ r.owner_label }}</td>
+        <td class="mono">{{ r.country_code }}</td>
+        <td>{{ "★" * r.rating }}{{ "☆" * (5 - r.rating) }}</td>
+        <td>{{ r.comment or "—" }}</td>
+        <td><a href="/orders/{{ r.order_id }}" class="status-label">#{{ r.order_id }}</a></td>
+        <td class="status-label">{{ r.created_at.strftime("%d.%m.%Y") }}</td>
+        <td>
+          <form method="post" action="/reviews/{{ r.id }}/delete" onsubmit="return confirm('Удалить отзыв?');" style="margin:0;">
+            <button class="btn danger" type="submit" style="padding:6px 12px; font-size:12px;">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="status-label">Отзывов пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<style>.no-click { cursor: default !important; }</style>
+{% endblock %}

@@ -65,7 +65,7 @@ function escapeHtml(text) {
 // --- Навигация между экранами ---
 const screens = [
   "home", "esim-countries", "esim-packages", "esim-checkout",
-  "products", "my-esims", "balance", "profile", "notifications", "chats", "chat",
+  "products", "order-form", "my-esims", "balance", "profile", "notifications", "chats", "chat",
 ];
 const TAB_ROOTS = { home: "home", "esim-countries": "browse", "my-esims": "my-esims", profile: "profile" };
 
@@ -98,6 +98,7 @@ function showScreen(name) {
     "esim-packages": selectedCountry ? selectedCountry.name : "",
     "esim-checkout": t("checkout_title"),
     products: currentCategory ? currentCategory.title : "",
+    "order-form": t("order_form_title"),
     "my-esims": t("tab_my_esims"),
     balance: t("nav_balance"),
     profile: t("tab_profile"),
@@ -108,7 +109,7 @@ function showScreen(name) {
   document.getElementById("header-title").textContent = titles[name] || "KaLine";
 
   const activeTab = isTabRoot ? TAB_ROOTS[name] :
-    ["esim-packages", "esim-checkout", "products"].includes(name) ? "browse" :
+    ["esim-packages", "esim-checkout", "products", "order-form"].includes(name) ? "browse" :
     ["balance", "notifications", "chats", "chat"].includes(name) ? "profile" : null;
   document.querySelectorAll(".tab-btn").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.tab === activeTab);
@@ -119,6 +120,7 @@ document.getElementById("back-btn").addEventListener("click", () => {
   if (!document.getElementById("screen-esim-checkout").hidden) return showScreen("esim-packages");
   if (!document.getElementById("screen-esim-packages").hidden) return showScreen("esim-countries");
   if (!document.getElementById("screen-products").hidden) return showScreen("home");
+  if (!document.getElementById("screen-order-form").hidden) return showScreen("products");
   if (!document.getElementById("screen-balance").hidden) return showScreen("profile");
   if (!document.getElementById("screen-notifications").hidden) return showScreen("profile");
   if (!document.getElementById("screen-chats").hidden) return showScreen("profile");
@@ -754,16 +756,53 @@ async function loadProducts(categorySlug) {
   }
 }
 
+let pendingOrderProductId = null;
+
 async function startProductChat(productId) {
-  const res = await api("/api/conversations", {
-    method: "POST",
-    body: JSON.stringify({ category_id: currentCategory.id, product_id: productId }),
-  });
-  currentConversationId = res.conversation_id;
-  chatReturnScreen = "products";
-  await loadChatMessages();
-  showScreen("chat");
+  pendingOrderProductId = productId;
+  document.getElementById("order-form-product-title").textContent = currentCategory ? currentCategory.title : "";
+  document.getElementById("order-form-name").value = "";
+  document.getElementById("order-form-date").value = "";
+  document.getElementById("order-form-guests").value = "1";
+  document.getElementById("order-form-comment").value = "";
+  showScreen("order-form");
 }
+
+document.getElementById("order-form-submit-btn").addEventListener("click", async () => {
+  const name = document.getElementById("order-form-name").value.trim();
+  const date = document.getElementById("order-form-date").value;
+  const guests = document.getElementById("order-form-guests").value;
+  const comment = document.getElementById("order-form-comment").value.trim();
+
+  const lines = [
+    `${t("order_form_name")}: ${name || "—"}`,
+    `${t("order_form_date")}: ${date || "—"}`,
+    `${t("order_form_guests")}: ${guests || "—"}`,
+  ];
+  if (comment) lines.push(`${t("order_form_comment")}: ${comment}`);
+  const text = lines.join("\n");
+
+  const btn = document.getElementById("order-form-submit-btn");
+  btn.disabled = true;
+  try {
+    const res = await api("/api/conversations", {
+      method: "POST",
+      body: JSON.stringify({ category_id: currentCategory.id, product_id: pendingOrderProductId }),
+    });
+    currentConversationId = res.conversation_id;
+    await api(`/api/conversations/${currentConversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify({ text }),
+    });
+    chatReturnScreen = "products";
+    await loadChatMessages();
+    showScreen("chat");
+  } catch (e) {
+    tg.showAlert("Error, please try again.");
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // --- Чаты: список ---
 async function loadChatsList() {

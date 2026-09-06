@@ -14,10 +14,10 @@
 from aiogram.types import FSInputFile
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
-from sqlalchemy import select, String
+from sqlalchemy import select
 
 from app.database.db import get_session
-from app.database.models import Category, Conversation, ConversationMessage, ConversationStatus, User, WebsiteAccount
+from app.database.models import Category, Conversation, ConversationMessage, ConversationStatus, WebsiteAccount
 from app.webapp.auth import get_admin_user
 from app.webapp.notify_bots import client_notify_bot
 from app.webapp.shop_email import send_email
@@ -62,67 +62,6 @@ async def list_conversations(_=Depends(get_admin_user)):
             })
 
     return items
-
-
-@router.get("/support-chat/api/clients/search")
-async def search_clients(q: str = "", _=Depends(get_admin_user)):
-    """Поиск клиента для НОВОГО чата (админ начинает разговор первым) — по email
-    (аккаунты сайта) или по имени/username/telegram_id (пользователи бота)."""
-    q = q.strip()
-    if len(q) < 2:
-        return []
-    like = f"%{q}%"
-    async with get_session() as session:
-        site_rows = list((await session.execute(
-            select(WebsiteAccount).where(WebsiteAccount.email.ilike(like)).limit(20)
-        )).scalars())
-        bot_rows = list((await session.execute(
-            select(User).where(
-                User.username.ilike(like) | User.full_name.ilike(like) | User.telegram_id.cast(String).ilike(like)
-            ).limit(20)
-        )).scalars())
-
-    return (
-        [{"kind": "site", "id": a.id, "label": f"🌐 {a.email}"} for a in site_rows]
-        + [{"kind": "bot", "id": u.id, "label": f"💬 {u.full_name or u.username or u.telegram_id}"} for u in bot_rows]
-    )
-
-
-class StartConversationRequest(BaseModel):
-    kind: str  # "site" | "bot"
-    id: int
-
-
-@router.post("/support-chat/api/conversations/start")
-async def start_conversation_admin(body: StartConversationRequest, _=Depends(get_admin_user)):
-    """Админ начинает разговор первым (клиент ещё ничего не писал) — находим уже
-    открытый общий чат с этим клиентом или заводим новый, без темы/товара."""
-    async with get_session() as session:
-        if body.kind == "site":
-            existing = (await session.execute(select(Conversation).where(
-                Conversation.website_account_id == body.id, Conversation.category_id.is_(None),
-                Conversation.product_id.is_(None), Conversation.status == ConversationStatus.OPEN,
-            ))).scalar_one_or_none()
-            if existing:
-                return {"id": existing.id}
-            conversation = Conversation(website_account_id=body.id)
-        else:
-            user = await session.get(User, body.id)
-            if user is None:
-                raise HTTPException(status_code=404, detail="Пользователь не найден")
-            existing = (await session.execute(select(Conversation).where(
-                Conversation.client_telegram_id == user.telegram_id, Conversation.category_id.is_(None),
-                Conversation.product_id.is_(None), Conversation.status == ConversationStatus.OPEN,
-            ))).scalar_one_or_none()
-            if existing:
-                return {"id": existing.id}
-            conversation = Conversation(
-                client_telegram_id=user.telegram_id, client_username=user.username, client_full_name=user.full_name,
-            )
-        session.add(conversation)
-        await session.commit()
-        await session.refresh(conversation)
-        return {"id": conversation.id}
 
 
 @router.get("/support-chat/api/conversations/{conversation_id}/messages")

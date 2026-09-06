@@ -45,72 +45,12 @@ function showList() {
   stopPolling();
   currentConversationId = null;
   document.getElementById("screen-list").hidden = false;
-  document.getElementById("screen-search").hidden = true;
   document.getElementById("screen-thread").hidden = true;
   document.getElementById("back-btn").hidden = true;
-  document.getElementById("new-chat-btn").hidden = false;
   document.getElementById("header-title").textContent = "Чаты с клиентами";
   loadConversations();
   listPollTimer = setInterval(loadConversations, 5000);
 }
-
-function showSearch() {
-  stopPolling();
-  document.getElementById("screen-list").hidden = true;
-  document.getElementById("screen-search").hidden = false;
-  document.getElementById("screen-thread").hidden = true;
-  document.getElementById("back-btn").hidden = false;
-  document.getElementById("new-chat-btn").hidden = true;
-  document.getElementById("header-title").textContent = "Новый чат";
-  document.getElementById("client-search-results").innerHTML = "";
-  const input = document.getElementById("client-search-input");
-  input.value = "";
-  input.focus();
-}
-
-let searchDebounce = null;
-document.getElementById("client-search-input").addEventListener("input", (e) => {
-  clearTimeout(searchDebounce);
-  const q = e.target.value;
-  searchDebounce = setTimeout(() => runClientSearch(q), 300);
-});
-
-async function runClientSearch(q) {
-  const results = document.getElementById("client-search-results");
-  if (q.trim().length < 2) { results.innerHTML = ""; return; }
-  let clients;
-  try {
-    clients = await api(`/support-chat/api/clients/search?q=${encodeURIComponent(q)}`);
-  } catch (e) {
-    return;
-  }
-  results.innerHTML = "";
-  if (clients.length === 0) {
-    results.innerHTML = '<div class="empty">Никого не нашлось</div>';
-    return;
-  }
-  for (const c of clients) {
-    const row = document.createElement("div");
-    row.className = "client-row";
-    row.textContent = c.label;
-    row.addEventListener("click", () => startNewConversation(c));
-    results.appendChild(row);
-  }
-}
-
-async function startNewConversation(client) {
-  try {
-    const { id } = await api("/support-chat/api/conversations/start", {
-      method: "POST",
-      body: JSON.stringify({ kind: client.kind, id: client.id }),
-    });
-    openConversation(id, client.label, "Новый чат");
-  } catch (e) {
-    tg.showAlert("Не получилось начать чат, попробуй ещё раз.");
-  }
-}
-
-document.getElementById("new-chat-btn").addEventListener("click", showSearch);
 
 async function loadConversations() {
   const conversations = await api("/support-chat/api/conversations");
@@ -141,10 +81,8 @@ function openConversation(id, clientName, topicLine) {
   stopPolling();
   currentConversationId = id;
   document.getElementById("screen-list").hidden = true;
-  document.getElementById("screen-search").hidden = true;
   document.getElementById("screen-thread").hidden = false;
   document.getElementById("back-btn").hidden = false;
-  document.getElementById("new-chat-btn").hidden = true;
   document.getElementById("header-title").textContent = `${clientName} · ${topicLine}`;
   loadMessages();
   threadPollTimer = setInterval(loadMessages, 3000);

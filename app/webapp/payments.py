@@ -26,14 +26,12 @@ from app.config import settings
 from app.database.db import get_session
 from app.database.models import (
     Order, OrderStatus, Payment, PaymentProvider, PaymentStatus, User, TopUp, WebsiteAccount,
-    Notification, NotificationType, ReferralBonus,
+    Notification, NotificationType,
 )
 from app.services.esimaccess import esimaccess_client
 from app.services.payments import idram
 from app.services.payments.wallet_pay import wallet_pay_client, WalletPayError
 from app.services.payments.oxapay import oxapay_client, verify_webhook_signature, OxaPayError
-from app.services.payments import stripe_pay
-import stripe as stripe_sdk
 
 # Отдельный логгер для Idram — там реальные деньги и придирчивая верификация
 # (чек-сумма), поэтому важно видеть в логах Railway каждый шаг: что пришло,
@@ -102,12 +100,12 @@ async def _fulfill_order(session, order: Order) -> None:
     await session.commit()
 
 
-async def notify(session, *, website_account_id=None, user_id=None, type: NotificationType, title: str, body: str, link_url: str | None = None) -> None:
+async def notify(session, *, website_account_id=None, user_id=None, type: NotificationType, title: str, body: str) -> None:
     """Кладёт запись в ленту уведомлений внутри приложения (не путать с сообщением
     от бота в Telegram — это отдельная, более "тихая" история событий)."""
     session.add(Notification(
         website_account_id=website_account_id, user_id=user_id,
-        type=type, title=title, body=body, link_url=link_url,
+        type=type, title=title, body=body,
     ))
     await session.commit()
 
@@ -161,13 +159,6 @@ async def maybe_credit_referral_bonus(session, order: Order) -> None:
     bonus = round(float(order.price_charged) * REFERRAL_BONUS_PERCENT / 100, 2)
     referrer.balance = round(referrer.balance + bonus, 2)
     account.referral_bonus_paid = True
-    session.add(ReferralBonus(
-        website_account_id=(account.referred_by_id if model is WebsiteAccount else None),
-        user_id=(account.referred_by_id if model is User else None),
-        referred_website_account_id=(owner_id if model is WebsiteAccount else None),
-        referred_user_id=(owner_id if model is User else None),
-        order_id=order.id, amount=bonus,
-    ))
     await session.commit()
 
     ref_website_id = account.referred_by_id if model is WebsiteAccount else None
@@ -460,52 +451,6 @@ async def oxapay_webhook(request: Request, hmac_header: str = Header(default="",
 
         top_up = (
             await session.execute(select(TopUp).where(TopUp.external_payment_id == payload.get("order_id", "")))
-        ).scalar_one_or_none()
-        if top_up is not None:
-            await _credit_topup(session, top_up)
-
-    return "OK"
-
-
-@router.post("/webhooks/stripe", response_class=PlainTextResponse)
-async def stripe_webhook(request: Request, stripe_signature: str = Header(default="", alias="stripe-signature")):
-    """
-    Stripe шлёт вебхук на КАЖДОЕ событие (много типов) — нас интересует только
-    "checkout.session.completed". client_reference_id — это наш external_payment_id,
-    который мы сами передали при создании Checkout Session (см. stripe_pay.py).
-    """
-    raw_body = await request.body()
-    try:
-        event = stripe_pay.verify_webhook(raw_body, stripe_signature)
-    except (ValueError, stripe_sdk.SignatureVerificationError):
-        return PlainTextResponse("Invalid signature", status_code=400)
-
-    if event["type"] != "checkout.session.completed":
-        return "OK"  # другие типы событий (оплата отменена, спор и т.п.) пока не обрабатываем
-
-    session_obj = event["data"]["object"]
-    external_id = session_obj.get("client_reference_id") or ""
-
-    async with get_session() as session:
-        payment = (
-            await session.execute(select(Payment).where(Payment.external_payment_id == external_id))
-        ).scalar_one_or_none()
-
-        if payment is not None:
-            payment.status = PaymentStatus.PAID
-            payment.provider_transaction_id = session_obj.get("payment_intent")
-            payment.raw_callback = session_obj
-            await session.commit()
-
-            order = await session.get(Order, payment.order_id)
-            order.status = OrderStatus.PAID
-            await session.commit()
-
-            await _fulfill_order(session, order)
-            return "OK"
-
-        top_up = (
-            await session.execute(select(TopUp).where(TopUp.external_payment_id == external_id))
         ).scalar_one_or_none()
         if top_up is not None:
             await _credit_topup(session, top_up)

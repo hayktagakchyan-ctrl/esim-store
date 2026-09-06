@@ -9,25 +9,19 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Request, Form, Depends, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import select, String, func
+from sqlalchemy import select
 
 from app.config import settings
 from app.database.db import get_session, init_db
-from app.database.models import (
-    Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode,
-    ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
-    Notification, NotificationType, AdminUser, AdminRole, ReferralBonus, Review,
-)
+from app.database.models import Category, Order, OrderStatus, Package, Product, User, PromoCode
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
-from app.webapp.payments import _fulfill_order, notify
-from app.webapp.uploads import save_service_file
-from app.webapp.shop_auth import hash_password, verify_password
+from app.webapp.payments import _fulfill_order
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -67,17 +61,7 @@ async def security_headers(request: Request, call_next):
 
 
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-def _admin_template_context(request: Request) -> dict:
-    """Доступно во ВСЕХ шаблонах без явной передачи — текущая роль вошедшего
-    админа, чтобы прятать/показывать то, что зависит от прав (напр. правку
-    баланса — см. users_list.html)."""
-    return {
-        "is_full_admin": request.session.get("admin_role", AdminRole.FULL.value) == AdminRole.FULL.value,
-        "admin_login": request.session.get("admin_login", settings.ADMIN_PANEL_LOGIN),
-    }
-
-
-templates = Jinja2Templates(directory=BASE_DIR / "templates", context_processors=[_admin_template_context])
+templates = Jinja2Templates(directory=BASE_DIR / "templates")
 
 # (label, число закрашенных "делений сигнала" из 4, css-класс цвета) — используется в таблице заказов
 STATUS_META = {
@@ -89,20 +73,11 @@ STATUS_META = {
     OrderStatus.REFUNDED: ("Возврат", 0, "red"),
 }
 templates.env.globals["STATUS_META"] = STATUS_META
-templates.env.globals["OrderStatus"] = OrderStatus
 
 
 def require_login(request: Request) -> None:
     if not request.session.get("authenticated"):
         raise HTTPException(status_code=303, headers={"Location": "/login"})
-
-
-def require_full_admin(request: Request) -> None:
-    """Для действий, которые нельзя доверять роли 'support' — сейчас это только
-    правка баланса и управление другими админами."""
-    require_login(request)
-    if request.session.get("admin_role", AdminRole.FULL.value) != AdminRole.FULL.value:
-        raise HTTPException(status_code=403, detail="Недостаточно прав — нужен полный доступ")
 
 
 @app.exception_handler(HTTPException)
@@ -128,21 +103,7 @@ async def login_submit(request: Request, login: str = Form(...), password: str =
     if login == settings.ADMIN_PANEL_LOGIN and password == settings.ADMIN_PANEL_PASSWORD:
         reset_rate_limit(rate_key)
         request.session["authenticated"] = True
-        request.session["admin_role"] = AdminRole.FULL.value
-        request.session["admin_login"] = login
-        return RedirectResponse(url="/dashboard", status_code=302)
-
-    async with get_session() as session:
-        admin = (await session.execute(
-            select(AdminUser).where(AdminUser.login == login, AdminUser.is_active.is_(True))
-        )).scalar_one_or_none()
-
-    if admin is not None and verify_password(password, admin.password_hash):
-        reset_rate_limit(rate_key)
-        request.session["authenticated"] = True
-        request.session["admin_role"] = admin.role.value
-        request.session["admin_login"] = admin.login
-        return RedirectResponse(url="/dashboard", status_code=302)
+        return RedirectResponse(url="/orders", status_code=302)
 
     register_failure(rate_key)
     return templates.TemplateResponse(
@@ -158,126 +119,7 @@ async def logout(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse(url="/dashboard")
-
-
-PAID_ORDER_STATUSES = (OrderStatus.PAID, OrderStatus.PROVISIONING, OrderStatus.ACTIVE)
-
-
-@app.get("/dashboard", response_class=HTMLResponse)
-async def dashboard(request: Request, _=Depends(require_login)):
-    async with get_session() as session:
-        orders = list((await session.execute(select(Order))).scalars())
-        paid_orders = [o for o in orders if o.status in PAID_ORDER_STATUSES]
-
-        revenue_orders = sum(float(o.price_charged) for o in paid_orders)
-
-        service_requests = list((await session.execute(select(ServiceRequest))).scalars())
-        paid_services = [r for r in service_requests if r.status == ServiceRequestStatus.PAID]
-        revenue_services = sum(float(r.final_price) for r in paid_services if r.final_price is not None)
-
-        orders_by_status = {s: 0 for s in OrderStatus}
-        for o in orders:
-            orders_by_status[o.status] += 1
-
-        # Уникальных покупателей — приблизительно: аккаунт сайта, пользователь бота
-        # и email гостя (без аккаунта) в заказах считаются как три разных категории,
-        # поэтому если один и тот же человек покупал и как гость, и залогинившись —
-        # он попадёт в счётчик дважды. Для точного числа нужна была бы отдельная
-        # таблица "клиент", которой пока в схеме нет.
-        site_customers = {o.website_account_id for o in orders if o.website_account_id}
-        bot_customers = {o.user_id for o in orders if o.user_id and not o.website_account_id}
-        guest_emails = {o.email for o in orders if o.email and not o.website_account_id and not o.user_id}
-        customers_count = len(site_customers) + len(bot_customers) + len(guest_emails)
-
-        # Топ пакетов и стран по выручке — на оплаченных заказах.
-        for o in paid_orders:
-            await session.refresh(o, attribute_names=["package"])
-        package_revenue: dict[int, dict] = {}
-        country_revenue: dict[str, float] = {}
-        for o in paid_orders:
-            pkg = o.package
-            entry = package_revenue.setdefault(pkg.id, {"title": pkg.title, "country": pkg.country_name, "revenue": 0.0, "count": 0})
-            entry["revenue"] += float(o.price_charged)
-            entry["count"] += 1
-            country_revenue[pkg.country_name] = country_revenue.get(pkg.country_name, 0.0) + float(o.price_charged)
-
-        top_packages = sorted(package_revenue.values(), key=lambda e: e["revenue"], reverse=True)[:8]
-        top_countries = sorted(country_revenue.items(), key=lambda kv: kv[1], reverse=True)[:8]
-
-        # Последние покупки — заказы eSIM и оплаченные заявки на услуги вместе, по дате.
-        recent_orders = sorted(orders, key=lambda o: o.created_at, reverse=True)[:15]
-        for o in recent_orders:
-            await session.refresh(o, attribute_names=["package"])
-            if o.website_account_id:
-                account = await session.get(WebsiteAccount, o.website_account_id)
-                o.customer_label = account.email if account else "—"
-            elif o.user_id:
-                bot_user = await session.get(User, o.user_id)
-                o.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
-            else:
-                o.customer_label = o.email or "гость"
-
-        recent_services = sorted(paid_services, key=lambda r: r.paid_at or r.created_at, reverse=True)[:10]
-        for r in recent_services:
-            await session.refresh(r, attribute_names=["product"])
-            if r.website_account_id:
-                account = await session.get(WebsiteAccount, r.website_account_id)
-                r.customer_label = account.email if account else "—"
-            elif r.user_id:
-                bot_user = await session.get(User, r.user_id)
-                r.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
-            else:
-                r.customer_label = "—"
-
-        # Реферальная программа — сколько всего пришло по ссылкам и сколько
-        # бонусов реально начислено (только с момента появления ReferralBonus,
-        # см. комментарий в database/models.py — старые начисления не видны).
-        referred_site = (await session.execute(
-            select(func.count()).select_from(WebsiteAccount).where(WebsiteAccount.referred_by_id.is_not(None))
-        )).scalar_one()
-        referred_bot = (await session.execute(
-            select(func.count()).select_from(User).where(User.referred_by_id.is_not(None))
-        )).scalar_one()
-        bonuses = list((await session.execute(select(ReferralBonus).order_by(ReferralBonus.created_at.desc()))).scalars())
-        bonuses_total = sum(float(b.amount) for b in bonuses)
-        recent_bonuses = bonuses[:10]
-        for b in recent_bonuses:
-            if b.website_account_id:
-                acc = await session.get(WebsiteAccount, b.website_account_id)
-                b.referrer_label = acc.email if acc else "—"
-            elif b.user_id:
-                bu = await session.get(User, b.user_id)
-                b.referrer_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
-            else:
-                b.referrer_label = "—"
-
-        # Отзывы — просто сводка тут, полный список с удалением на /reviews.
-        reviews = list((await session.execute(select(Review))).scalars())
-        reviews_count = len(reviews)
-        reviews_avg = (sum(r.rating for r in reviews) / reviews_count) if reviews_count else 0
-
-    return templates.TemplateResponse(
-        "dashboard.html",
-        {
-            "request": request,
-            "revenue_orders": revenue_orders,
-            "revenue_services": revenue_services,
-            "revenue_total": revenue_orders + revenue_services,
-            "orders_total": len(orders),
-            "orders_by_status": orders_by_status,
-            "customers_count": customers_count,
-            "top_packages": top_packages,
-            "top_countries": top_countries,
-            "recent_orders": recent_orders,
-            "recent_services": recent_services,
-            "referred_total": referred_site + referred_bot,
-            "bonuses_total": bonuses_total,
-            "recent_bonuses": recent_bonuses,
-            "reviews_count": reviews_count,
-            "reviews_avg": reviews_avg,
-        },
-    )
+    return RedirectResponse(url="/orders")
 
 
 @app.get("/orders", response_class=HTMLResponse)
@@ -865,62 +707,6 @@ async def product_delete(product_id: int, _=Depends(require_login)):
     return RedirectResponse(url="/products", status_code=302)
 
 
-# --- Вопросы формы заказа (ProductQuestion) — см. комментарий в database/models.py ---
-
-QUESTION_TYPE_LABELS = {
-    QuestionType.YES_NO: "Да / нет",
-    QuestionType.TEXT: "Текст",
-    QuestionType.FILE: "Файл",
-}
-
-
-@app.get("/products/{product_id}/questions", response_class=HTMLResponse)
-async def product_questions_list(request: Request, product_id: int, _=Depends(require_login)):
-    async with get_session() as session:
-        product = await session.get(Product, product_id)
-        if product is None:
-            raise HTTPException(status_code=404, detail="Товар не найден")
-        questions = list((await session.execute(
-            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
-            .order_by(ProductQuestion.position, ProductQuestion.id)
-        )).scalars())
-
-    return templates.TemplateResponse(
-        "product_questions.html",
-        {"request": request, "product": product, "questions": questions, "type_labels": QUESTION_TYPE_LABELS},
-    )
-
-
-@app.post("/products/{product_id}/questions/new")
-async def product_question_create(
-    product_id: int,
-    question_text: str = Form(...),
-    question_type: str = Form(...),
-    is_required: bool = Form(False),
-    _=Depends(require_login),
-):
-    async with get_session() as session:
-        count = (await session.execute(
-            select(func.count()).select_from(ProductQuestion).where(ProductQuestion.product_id == product_id)
-        )).scalar_one()
-        session.add(ProductQuestion(
-            product_id=product_id, question_text=question_text.strip(),
-            question_type=QuestionType(question_type), is_required=is_required, position=count,
-        ))
-        await session.commit()
-    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
-
-
-@app.post("/products/{product_id}/questions/{question_id}/delete")
-async def product_question_delete(product_id: int, question_id: int, _=Depends(require_login)):
-    async with get_session() as session:
-        q = await session.get(ProductQuestion, question_id)
-        if q is not None:
-            await session.delete(q)
-            await session.commit()
-    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
-
-
 # --- Промокоды ---
 
 @app.get("/promo-codes", response_class=HTMLResponse)
@@ -971,73 +757,6 @@ async def promo_code_toggle(promo_id: int, _=Depends(require_login)):
             promo.is_active = not promo.is_active
             await session.commit()
     return RedirectResponse(url="/promo-codes", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Пользователи — два независимых аккаунта (см. комментарий в database/models.py):
-# User (бот/Mini App, вход по Telegram) и WebsiteAccount (сайт, email+пароль).
-# У каждого свой баланс, поэтому и правим их раздельно, но на одной странице.
-# Это прямое редактирование поля balance — без истории изменений (TopUp здесь
-# не создаём, т.к. TopUp привязан к платёжным провайдерам, а это не платёж).
-# ---------------------------------------------------------------------------
-USERS_PAGE_LIMIT = 100
-
-
-@app.get("/users", response_class=HTMLResponse)
-async def users_list(request: Request, q: str = "", _=Depends(require_login)):
-    q = (q or "").strip()
-    async with get_session() as session:
-        bot_query = select(User).order_by(User.id.desc())
-        site_query = select(WebsiteAccount).order_by(WebsiteAccount.id.desc())
-
-        if q:
-            like = f"%{q}%"
-            bot_query = bot_query.where(
-                (User.username.ilike(like))
-                | (User.full_name.ilike(like))
-                | (User.telegram_id.cast(String).ilike(like))
-            )
-            site_query = site_query.where(WebsiteAccount.email.ilike(like))
-
-        bot_users = list((await session.execute(bot_query.limit(USERS_PAGE_LIMIT))).scalars())
-        site_accounts = list((await session.execute(site_query.limit(USERS_PAGE_LIMIT))).scalars())
-
-    return templates.TemplateResponse(
-        "users_list.html",
-        {
-            "request": request,
-            "bot_users": bot_users,
-            "site_accounts": site_accounts,
-            "q": q,
-            "page_limit": USERS_PAGE_LIMIT,
-        },
-    )
-
-
-@app.post("/users/bot/{user_id}/balance")
-async def bot_user_balance_update(
-    request: Request, user_id: int, balance: float = Form(...), _=Depends(require_full_admin)
-):
-    async with get_session() as session:
-        user = await session.get(User, user_id)
-        if user is not None:
-            user.balance = round(balance, 2)
-            await session.commit()
-    q = request.query_params.get("q", "")
-    return RedirectResponse(url=f"/users?q={q}", status_code=302)
-
-
-@app.post("/users/site/{account_id}/balance")
-async def site_account_balance_update(
-    request: Request, account_id: int, balance: float = Form(...), _=Depends(require_full_admin)
-):
-    async with get_session() as session:
-        account = await session.get(WebsiteAccount, account_id)
-        if account is not None:
-            account.balance = round(balance, 2)
-            await session.commit()
-    q = request.query_params.get("q", "")
-    return RedirectResponse(url=f"/users?q={q}", status_code=302)
 
 
 # --- Массовый импорт всего каталога esimaccess разом ---
@@ -1127,191 +846,3 @@ async def bulk_import_submit(
             await session.commit()
 
     return RedirectResponse(url=f"/packages?imported={created}&updated={updated}", status_code=302)
-
-# ---------------------------------------------------------------------------
-# Заявки на услуги (ServiceRequest) — форма вместо чата, см. models.py и
-# app/webapp/shop.py (сайт). Тут админ смотрит ответы, прикладывает файл
-# (ваучер/билет), подтверждает цену и переводит в "Готово" — клиенту
-# приходит уведомление со ссылкой на оплату с баланса.
-# ---------------------------------------------------------------------------
-
-SERVICE_STATUS_LABELS = {
-    ServiceRequestStatus.SUBMITTED: "На рассмотрении",
-    ServiceRequestStatus.READY: "Готово к оплате",
-    ServiceRequestStatus.PAID: "Оплачено",
-    ServiceRequestStatus.CANCELLED: "Отклонено",
-}
-
-
-@app.get("/service-requests", response_class=HTMLResponse)
-async def service_requests_list(request: Request, status: str | None = None, _=Depends(require_login)):
-    async with get_session() as session:
-        query = select(ServiceRequest).order_by(ServiceRequest.created_at.desc())
-        if status:
-            query = query.where(ServiceRequest.status == ServiceRequestStatus(status))
-        rows = list((await session.execute(query)).scalars())
-        for r in rows:
-            await session.refresh(r, attribute_names=["product"])
-            if r.website_account_id:
-                r.owner_label = (await session.get(WebsiteAccount, r.website_account_id)).email
-            elif r.user_id:
-                bot_user = await session.get(User, r.user_id)
-                r.owner_label = bot_user.full_name or bot_user.username or str(bot_user.telegram_id)
-            else:
-                r.owner_label = "—"
-
-    return templates.TemplateResponse(
-        "service_requests_list.html",
-        {
-            "request": request, "requests": rows, "statuses": list(ServiceRequestStatus),
-            "status_labels": SERVICE_STATUS_LABELS, "current_status": status,
-        },
-    )
-
-
-@app.get("/service-requests/{request_id}", response_class=HTMLResponse)
-async def service_request_detail(request: Request, request_id: int, _=Depends(require_login)):
-    async with get_session() as session:
-        sr = await session.get(ServiceRequest, request_id)
-        if sr is None:
-            raise HTTPException(status_code=404, detail="Заявка не найдена")
-        await session.refresh(sr, attribute_names=["answers", "product"])
-        owner_label = "—"
-        if sr.website_account_id:
-            account = await session.get(WebsiteAccount, sr.website_account_id)
-            owner_label = account.email if account else "—"
-        elif sr.user_id:
-            bot_user = await session.get(User, sr.user_id)
-            owner_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
-
-    return templates.TemplateResponse(
-        "service_request_detail.html",
-        {
-            "request": request, "sr": sr, "owner_label": owner_label,
-            "status_labels": SERVICE_STATUS_LABELS,
-        },
-    )
-
-
-@app.post("/service-requests/{request_id}/ready")
-async def service_request_mark_ready(
-    request_id: int,
-    final_price: float = Form(...),
-    admin_note: str = Form(""),
-    deliverable: UploadFile | None = File(None),
-    _=Depends(require_login),
-):
-    async with get_session() as session:
-        sr = await session.get(ServiceRequest, request_id)
-        if sr is None:
-            raise HTTPException(status_code=404, detail="Заявка не найдена")
-        await session.refresh(sr, attribute_names=["product"])
-
-        if deliverable is not None and deliverable.filename:
-            saved = await save_service_file(deliverable, sr.id)
-            sr.deliverable_path = saved["url"]
-            sr.deliverable_filename = saved["filename"]
-
-        sr.final_price = final_price
-        sr.admin_note = admin_note.strip() or None
-        sr.status = ServiceRequestStatus.READY
-        sr.ready_at = datetime.utcnow()
-        await session.commit()
-
-        await notify(
-            session, website_account_id=sr.website_account_id, user_id=sr.user_id,
-            type=NotificationType.ORDER,
-            title="Заявка готова",
-            body=f"«{sr.product.title('ru')}» готова — можно оплатить с баланса (${final_price:.2f}).",
-            link_url=f"/shop/account/service-requests/{sr.id}",
-        )
-
-    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
-
-
-@app.post("/service-requests/{request_id}/cancel")
-async def service_request_cancel(request_id: int, admin_note: str = Form(""), _=Depends(require_login)):
-    async with get_session() as session:
-        sr = await session.get(ServiceRequest, request_id)
-        if sr is None:
-            raise HTTPException(status_code=404, detail="Заявка не найдена")
-        sr.status = ServiceRequestStatus.CANCELLED
-        sr.admin_note = admin_note.strip() or sr.admin_note
-        await session.commit()
-    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Другие админы (AdminUser) — см. комментарий в database/models.py. Доступно
-# только полному админу (require_full_admin) — иначе support мог бы себе же
-# выдать полный доступ.
-# ---------------------------------------------------------------------------
-
-@app.get("/admins", response_class=HTMLResponse)
-async def admins_list(request: Request, _=Depends(require_full_admin)):
-    async with get_session() as session:
-        admins = list((await session.execute(select(AdminUser).order_by(AdminUser.created_at.desc()))).scalars())
-    return templates.TemplateResponse("admins_list.html", {"request": request, "admins": admins})
-
-
-@app.post("/admins/new")
-async def admin_create(
-    login: str = Form(...), password: str = Form(...), role: str = Form(...), _=Depends(require_full_admin)
-):
-    async with get_session() as session:
-        existing = (await session.execute(select(AdminUser).where(AdminUser.login == login.strip()))).scalar_one_or_none()
-        if existing is None:
-            session.add(AdminUser(
-                login=login.strip(), password_hash=hash_password(password), role=AdminRole(role),
-            ))
-            await session.commit()
-    return RedirectResponse(url="/admins", status_code=302)
-
-
-@app.post("/admins/{admin_id}/toggle")
-async def admin_toggle(admin_id: int, _=Depends(require_full_admin)):
-    async with get_session() as session:
-        admin = await session.get(AdminUser, admin_id)
-        if admin is not None:
-            admin.is_active = not admin.is_active
-            await session.commit()
-    return RedirectResponse(url="/admins", status_code=302)
-
-
-@app.post("/admins/{admin_id}/delete")
-async def admin_delete(admin_id: int, _=Depends(require_full_admin)):
-    async with get_session() as session:
-        admin = await session.get(AdminUser, admin_id)
-        if admin is not None:
-            await session.delete(admin)
-            await session.commit()
-    return RedirectResponse(url="/admins", status_code=302)
-
-
-# --- Отзывы (Review) — просмотр и удаление спама/оскорблений ---
-
-@app.get("/reviews", response_class=HTMLResponse)
-async def reviews_list(request: Request, _=Depends(require_login)):
-    async with get_session() as session:
-        reviews = list((await session.execute(select(Review).order_by(Review.created_at.desc()))).scalars())
-        for r in reviews:
-            if r.website_account_id:
-                acc = await session.get(WebsiteAccount, r.website_account_id)
-                r.owner_label = acc.email if acc else "—"
-            elif r.user_id:
-                bu = await session.get(User, r.user_id)
-                r.owner_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
-            else:
-                r.owner_label = "—"
-
-    return templates.TemplateResponse("reviews_list.html", {"request": request, "reviews": reviews})
-
-
-@app.post("/reviews/{review_id}/delete")
-async def review_delete(review_id: int, _=Depends(require_login)):
-    async with get_session() as session:
-        review = await session.get(Review, review_id)
-        if review is not None:
-            await session.delete(review)
-            await session.commit()
-    return RedirectResponse(url="/reviews", status_code=302)

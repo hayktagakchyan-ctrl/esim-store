@@ -138,7 +138,6 @@ class PaymentProvider(str, enum.Enum):
     IDRAM = "idram"
     WALLET_PAY = "wallet_pay"   # Telegram Wallet — покрывает и "крипту", и "Telegram-кошелёк" одним провайдером
     OXAPAY = "oxapay"           # крипта с ЛЮБОГО адреса/биржи, без привязки к Telegram-аккаунту
-    STRIPE = "stripe"           # карта, международно — пока подключено только для пополнения баланса на сайте
     TEST = "test"               # только для проверки — см. settings.ENABLE_TEST_PAYMENT
     BALANCE = "balance"         # оплата с внутреннего баланса сайта (см. WebsiteAccount.balance)
 
@@ -318,101 +317,6 @@ class ConversationMessage(Base):
     conversation: Mapped["Conversation"] = relationship(back_populates="messages")
 
 
-class QuestionType(str, enum.Enum):
-    YES_NO = "yes_no"
-    TEXT = "text"
-    FILE = "file"
-
-
-class ProductQuestion(Base):
-    """
-    Вопрос в форме заказа услуги (лаунж/тур и т.п.) — админ сам решает, что
-    спросить у клиента при оформлении: да/нет, свободный текст или файл
-    (например, скан билета). Настраивается в админке на странице товара —
-    см. /products/{id}/questions. Если у товара нет ни одного вопроса,
-    оформление остаётся через чат (как было раньше) — это осознанный fallback,
-    а не баг.
-    """
-    __tablename__ = "product_questions"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    question_text: Mapped[str] = mapped_column(String(500))
-    question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), default=QuestionType.TEXT)
-    is_required: Mapped[bool] = mapped_column(Boolean, default=True)
-    position: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
-class ServiceRequestStatus(str, enum.Enum):
-    SUBMITTED = "submitted"   # клиент отправил форму — ждём обработки админом
-    READY = "ready"           # админ подтвердил и прикрепил файл — ждём оплаты
-    PAID = "paid"             # оплачено с баланса — файл открыт для скачивания
-    CANCELLED = "cancelled"   # админ отклонил заявку
-
-
-class ServiceRequest(Base):
-    """
-    Заявка на услугу (лаунж/тур) через настраиваемую форму — альтернатива
-    чату для товаров, где админ завёл вопросы (ProductQuestion). Админ смотрит
-    ответы, прикрепляет файл (ваучер/билет), выставляет финальную цену и жмёт
-    "Готово" — клиенту приходит уведомление со ссылкой на оплату с баланса;
-    после оплаты файл становится доступен для скачивания.
-    Владелец — ЛИБО аккаунт сайта, ЛИБО пользователь бота (как и везде).
-    """
-    __tablename__ = "service_requests"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
-
-    status: Mapped[ServiceRequestStatus] = mapped_column(
-        Enum(ServiceRequestStatus), default=ServiceRequestStatus.SUBMITTED, index=True
-    )
-
-    # Цена в товаре часто ориентировочная ("обычно обсуждается в чате") — тут
-    # админ подтверждает финальную сумму в момент перевода заявки в "Готово".
-    final_price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
-    currency: Mapped[str] = mapped_column(String(8), default="USD")
-
-    deliverable_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    deliverable_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # виден клиенту, необязателен
-
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    ready_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-    paid_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
-
-    product: Mapped["Product"] = relationship()
-    answers: Mapped[list["ServiceRequestAnswer"]] = relationship(
-        back_populates="service_request", order_by="ServiceRequestAnswer.id"
-    )
-
-
-class ServiceRequestAnswer(Base):
-    """
-    Один ответ на один вопрос анкеты. question_text/question_type — СНИМОК на
-    момент ответа (а не только ссылка на ProductQuestion), чтобы если админ
-    потом изменит или удалит вопрос в товаре, старые заявки не потеряли смысл.
-    """
-    __tablename__ = "service_request_answers"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    service_request_id: Mapped[int] = mapped_column(ForeignKey("service_requests.id"), index=True)
-    question_id: Mapped[int | None] = mapped_column(ForeignKey("product_questions.id"), nullable=True)
-    question_text: Mapped[str] = mapped_column(String(500))
-    question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType))
-
-    answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
-    answer_bool: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
-    answer_file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    answer_file_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-
-    service_request: Mapped["ServiceRequest"] = relationship(back_populates="answers")
-
-
 class WebsiteAccount(Base):
     """
     Логин для сайта (app/webapp/shop.py) — email + пароль, обязателен для покупки
@@ -485,27 +389,6 @@ class Review(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
-class ReferralBonus(Base):
-    """
-    Запись о выплаченном реферальном бонусе — раньше сумма просто прибавлялась
-    к балансу рефери без отдельной записи (см. maybe_credit_referral_bonus в
-    app/webapp/payments.py), поэтому старые начисления (до появления этой
-    таблицы) тут не видны — только новые, начиная с этого момента.
-    """
-    __tablename__ = "referral_bonuses"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    # Кто получил бонус (реферер) — ЛИБО аккаунт сайта, ЛИБО пользователь бота.
-    website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), index=True, nullable=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
-    # Кто был приглашён (реферал) и чей заказ вызвал начисление.
-    referred_website_account_id: Mapped[int | None] = mapped_column(ForeignKey("website_accounts.id"), nullable=True)
-    referred_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
-    order_id: Mapped[int] = mapped_column(ForeignKey("orders.id"))
-    amount: Mapped[float] = mapped_column(Numeric(10, 2))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-
 class Favorite(Base):
     """Избранные страны — просто список кодов стран на аккаунт. Владелец —
     ЛИБО аккаунт сайта, ЛИБО пользователь бота (ровно один из двух)."""
@@ -568,33 +451,5 @@ class Notification(Base):
     type: Mapped[NotificationType] = mapped_column(Enum(NotificationType))
     title: Mapped[str] = mapped_column(String(255))
     body: Mapped[str] = mapped_column(Text)
-    # Ссылка на действие (напр. "оплатить заявку с баланса") — необязательна,
-    # старые системные уведомления её не имеют. Колонка добавлена в уже
-    # существующую таблицу, поэтому создаётся отдельной миграцией в db.py
-    # (create_all() новые колонки в старых таблицах не добавляет).
-    link_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-class AdminRole(str, enum.Enum):
-    FULL = "full"        # видит и может всё, включая правку баланса и управление другими админами
-    SUPPORT = "support"  # всё, кроме правки баланса пользователей
-
-
-class AdminUser(Base):
-    """
-    Учётка для входа в админ-панель — до этого был единственный логин/пароль
-    из настроек (ADMIN_PANEL_LOGIN/PASSWORD), теперь можно завести несколько
-    админов с разными правами. Логин из настроек по-прежнему работает как
-    раньше (см. require_login в admin_panel/app.py) — это ДОПОЛНИТЕЛЬНЫЙ способ
-    входа, а не замена, чтобы не потерять доступ, если случайно удалишь всех
-    остальных или забудешь пароль от одного из них.
-    """
-    __tablename__ = "admin_users"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    login: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    password_hash: Mapped[str] = mapped_column(String(255))
-    role: Mapped[AdminRole] = mapped_column(Enum(AdminRole), default=AdminRole.SUPPORT)
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

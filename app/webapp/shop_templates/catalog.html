@@ -64,10 +64,6 @@
   var favoriteCodes = null; // подтянем лениво, только если нажали фильтр "Избранное"
 
   var search = document.getElementById("country-search");
-
-  // Если пришли из поля поиска на главной (?q=...), подставляем значение и сразу фильтруем.
-  var presetQuery = new URLSearchParams(window.location.search).get("q");
-  if (presetQuery) { search.value = presetQuery; }
   var rows = Array.prototype.slice.call(document.querySelectorAll(".country-row"));
   var buttons = Array.prototype.slice.call(document.querySelectorAll(".region-filter-btn"));
   var noResults = document.getElementById("no-results");
@@ -105,7 +101,6 @@
       applyFilters();
     });
   });
-  applyFilters(); // применяем сразу — на случай, если поиск пришёл предзаполненным через ?q=
 })();
 </script>
 {% endblock %}

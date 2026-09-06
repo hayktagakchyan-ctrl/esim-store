@@ -17,7 +17,7 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
@@ -28,19 +28,15 @@ from app.database.models import (
     Category, Conversation, ConversationMessage, ConversationStatus, Favorite, Order, OrderStatus,
     Package, Payment, PaymentProvider, PaymentStatus, Product, Review, TopUp, WebsiteAccount,
     Notification, NotificationType, PromoCode, PromoCodeRedemption,
-    ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.payments import idram
 from app.services.payments.oxapay import oxapay_client, OxaPayError
-from app.services.payments import stripe_pay
-from app.services.payments.stripe_pay import StripePaymentError
 from app.webapp.notify_bots import support_notify_bot
 from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT, notify
 from app.webapp.shop_auth import get_current_account, hash_password, verify_password
 from app.webapp.shop_email import send_email
 from app.webapp.shop_i18n import get_lang, t as translate
-from app.webapp.uploads import save_service_file
 
 router = APIRouter()
 
@@ -69,44 +65,8 @@ def _country_hue(code: str) -> int:
     return 190 + sum(ord(c) for c in (code or "")) * 37 % 100  # 190..290: cyan → blue → purple
 
 
-_REGION_ICON_RULES = [
-    # Порядок важен: более специфичные варианты (напр. "центральная азия")
-    # должны проверяться раньше общих ("азия"), иначе им never достанется своя иконка.
-    ("central-asia", ("центральн.*ази", "central asia")),
-    ("central-america", ("центральн.*амери", "central america")),
-    ("middle-east", ("ближн.*восток", "middle east")),
-    ("south-america", ("южн.*амери", "south america")),
-    ("north-america", ("север.*амери", "north america")),
-    ("caribbean", ("кариб", "caribbean")),
-    ("antarctica", ("антаркт", "antarctica")),
-    ("russia-cis", ("росси", "снг", "russia", " cis", "cis ")),
-    ("europe", ("европ", "europe")),
-    ("africa", ("африк", "africa")),
-    ("oceania", ("океан", "oceania", "австрал", "australia")),
-    ("asia", ("ази", "asia")),
-]
-
-
-def _region_icon(name: str) -> str | None:
-    """
-    Название регионального пакета → путь к иконке (см. shop_static/img/regions/).
-    Иконки — реальные картинки, а не эмодзи-заглушка, поэтому подбираем по
-    ключевым словам в названии; если ни одно не подошло — вернём None, и
-    шаблон покажет обычный флаг/глобус вместо иконки.
-    """
-    import re
-
-    low = (name or "").lower()
-    for icon, patterns in _REGION_ICON_RULES:
-        for p in patterns:
-            if re.search(p, low):
-                return f"/shop-static/img/regions/{icon}.jpg"
-    return None
-
-
 templates.env.filters["flag"] = _country_flag
 templates.env.filters["hue"] = _country_hue
-templates.env.filters["region_icon"] = _region_icon
 
 
 def _safe_next(next_url: str) -> str:
@@ -142,7 +102,6 @@ async def render(request: Request, template_name: str, **context):
         "lang": lang,
         "t": lambda key: translate(key, lang),
         "account": account,
-        "stripe_enabled": bool(settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY),
     })
     return templates.TemplateResponse(template_name, context)
 
@@ -475,15 +434,6 @@ async def shop_service_products(request: Request, slug: str):
                 select(Product).where(Product.category_id == category.id, Product.is_active.is_(True))
             )).scalars()
         )
-        # Признак "есть анкета" — считаем сразу для всех товаров одним запросом,
-        # чтобы не дёргать БД в цикле по каждому товару.
-        product_ids = [p.id for p in products]
-        has_form_ids = set()
-        if product_ids:
-            rows = (await session.execute(
-                select(ProductQuestion.product_id).where(ProductQuestion.product_id.in_(product_ids)).distinct()
-            )).scalars()
-            has_form_ids = set(rows)
 
     return await render(
         request, "service_products.html",
@@ -493,8 +443,7 @@ async def shop_service_products(request: Request, slug: str):
         logged_in=account is not None,
         products=[
             {"id": p.id, "title": p.title(lang), "description": p.description(lang),
-             "price": float(p.price) if p.price is not None else None, "currency": p.currency,
-             "has_form": p.id in has_form_ids}
+             "price": float(p.price) if p.price is not None else None, "currency": p.currency}
             for p in products
         ],
     )
@@ -511,7 +460,10 @@ async def _notify_admin_new_message(client_label: str, topic_label: str, preview
 
 
 @router.post("/shop/chat/start")
-async def start_chat(request: Request, category_id: str = Form(""), product_id: str = Form("")):
+async def start_chat(
+    request: Request, category_id: str = Form(""), product_id: str = Form(""),
+    name: str = Form(""), order_date: str = Form(""), guests: str = Form(""), comment: str = Form(""),
+):
     account = await get_current_account(request)
     if account is None:
         return require_login_redirect(request)
@@ -540,178 +492,21 @@ async def start_chat(request: Request, category_id: str = Form(""), product_id: 
         await session.refresh(conversation)
         conversation_id = conversation.id
 
+        # Если это заказ конкретного товара (лаунж/тур) — оформляем анкету первым
+        # сообщением, чтобы админ сразу видел детали, а не спрашивал их заново.
+        if prod_id is not None and (name or order_date or guests or comment):
+            lang = get_lang(request)
+            lines = [
+                f"{translate('order_form_name', lang)}: {name or '—'}",
+                f"{translate('order_form_date', lang)}: {order_date or '—'}",
+                f"{translate('order_form_guests', lang)}: {guests or '—'}",
+            ]
+            if comment:
+                lines.append(f"{translate('order_form_comment', lang)}: {comment}")
+            session.add(ConversationMessage(conversation_id=conversation_id, direction="in", text="\n".join(lines)))
+            await session.commit()
+
     return RedirectResponse(url=f"/shop/chat/{conversation_id}", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Заявки на услуги через настраиваемую форму (см. ProductQuestion/ServiceRequest
-# в database/models.py) — альтернатива чату для товаров, где админ завёл вопросы.
-# ---------------------------------------------------------------------------
-
-async def _service_request_or_404(session, request_id: int, account) -> ServiceRequest:
-    sr = await session.get(ServiceRequest, request_id)
-    if sr is None or sr.website_account_id != account.id:
-        raise HTTPException(status_code=404, detail="Заявка не найдена")
-    await session.refresh(sr, attribute_names=["answers", "product"])
-    return sr
-
-
-@router.get("/shop/services/product/{product_id}/request", response_class=HTMLResponse)
-async def service_request_form(request: Request, product_id: int):
-    account = await get_current_account(request)
-    if account is None:
-        return require_login_redirect(request)
-
-    lang = get_lang(request)
-    async with get_session() as session:
-        product = await session.get(Product, product_id)
-        if product is None or not product.is_active:
-            raise HTTPException(status_code=404, detail="Услуга не найдена")
-        questions = list((await session.execute(
-            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
-            .order_by(ProductQuestion.position, ProductQuestion.id)
-        )).scalars())
-        if not questions:
-            # У этого товара анкета не настроена — оформление только через чат.
-            raise HTTPException(status_code=404, detail="Для этой услуги оформление через чат")
-
-    return await render(
-        request, "service_request_form.html",
-        product={"id": product.id, "title": product.title(lang),
-                 "price": float(product.price) if product.price is not None else None, "currency": product.currency},
-        questions=questions,
-    )
-
-
-@router.post("/shop/services/product/{product_id}/request")
-async def service_request_submit(request: Request, product_id: int):
-    account = await get_current_account(request)
-    if account is None:
-        return require_login_redirect(request)
-
-    form = await request.form()
-
-    async with get_session() as session:
-        product = await session.get(Product, product_id)
-        if product is None or not product.is_active:
-            raise HTTPException(status_code=404, detail="Услуга не найдена")
-        questions = list((await session.execute(
-            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
-            .order_by(ProductQuestion.position, ProductQuestion.id)
-        )).scalars())
-
-        sr = ServiceRequest(product_id=product_id, website_account_id=account.id, currency=product.currency)
-        session.add(sr)
-        await session.flush()  # нужен sr.id — и для файлов на диске, и для FK у ответов
-
-        for q in questions:
-            answer = ServiceRequestAnswer(
-                service_request_id=sr.id, question_id=q.id,
-                question_text=q.question_text, question_type=q.question_type,
-            )
-            if q.question_type == QuestionType.YES_NO:
-                raw = form.get(f"answer_{q.id}")
-                answer.answer_bool = (raw == "yes") if raw in ("yes", "no") else None
-                if q.is_required and answer.answer_bool is None:
-                    raise HTTPException(status_code=400, detail=f"Ответьте на вопрос: {q.question_text}")
-            elif q.question_type == QuestionType.TEXT:
-                raw = (form.get(f"answer_{q.id}") or "").strip()
-                answer.answer_text = raw or None
-                if q.is_required and not raw:
-                    raise HTTPException(status_code=400, detail=f"Заполните: {q.question_text}")
-            else:  # FILE
-                upload = form.get(f"answer_file_{q.id}")
-                if upload is not None and getattr(upload, "filename", ""):
-                    saved = await save_service_file(upload, sr.id)
-                    answer.answer_file_path = saved["url"]
-                    answer.answer_file_filename = saved["filename"]
-                elif q.is_required:
-                    raise HTTPException(status_code=400, detail=f"Прикрепите файл: {q.question_text}")
-            session.add(answer)
-
-        await session.commit()
-        request_id = sr.id
-
-    try:
-        await support_notify_bot.send_message(
-            chat_id=settings.SUPPORT_CHAT_ID,
-            text=f"🆕 Новая заявка на услугу (сайт)\n{product.title('ru')}\nОт: {account.email}\n"
-                 f"Посмотреть в админке: заявка #{request_id}",
-        )
-    except Exception:
-        pass
-
-    return RedirectResponse(url=f"/shop/account/service-requests/{request_id}", status_code=302)
-
-
-@router.get("/shop/account/service-requests", response_class=HTMLResponse)
-async def service_requests_list(request: Request):
-    account = await get_current_account(request)
-    if account is None:
-        return require_login_redirect(request)
-
-    lang = get_lang(request)
-    async with get_session() as session:
-        rows = list((await session.execute(
-            select(ServiceRequest).where(ServiceRequest.website_account_id == account.id)
-            .order_by(ServiceRequest.created_at.desc())
-        )).scalars())
-        for r in rows:
-            await session.refresh(r, attribute_names=["product"])
-
-    return await render(
-        request, "service_requests_list.html",
-        requests=[{"id": r.id, "product_title": r.product.title(lang), "status": r.status.value,
-                   "created_at": r.created_at, "final_price": r.final_price, "currency": r.currency} for r in rows],
-    )
-
-
-@router.get("/shop/account/service-requests/{request_id}", response_class=HTMLResponse)
-async def service_request_detail(request: Request, request_id: int):
-    account = await get_current_account(request)
-    if account is None:
-        return require_login_redirect(request)
-
-    async with get_session() as session:
-        sr = await _service_request_or_404(session, request_id, account)
-        lang = get_lang(request)
-        return await render(
-            request, "service_request_detail.html",
-            sr={
-                "id": sr.id, "status": sr.status.value, "product_title": sr.product.title(lang),
-                "final_price": float(sr.final_price) if sr.final_price is not None else None,
-                "currency": sr.currency, "admin_note": sr.admin_note,
-                "deliverable_path": sr.deliverable_path, "deliverable_filename": sr.deliverable_filename,
-                "answers": [{"question_text": a.question_text, "question_type": a.question_type.value,
-                             "answer_text": a.answer_text, "answer_bool": a.answer_bool,
-                             "answer_file_path": a.answer_file_path, "answer_file_filename": a.answer_file_filename}
-                            for a in sr.answers],
-            },
-            balance=account.balance,
-        )
-
-
-@router.post("/shop/account/service-requests/{request_id}/pay")
-async def service_request_pay(request: Request, request_id: int):
-    account = await get_current_account(request)
-    if account is None:
-        return require_login_redirect(request)
-
-    async with get_session() as session:
-        db_account = await session.get(WebsiteAccount, account.id)
-        sr = await _service_request_or_404(session, request_id, db_account)
-
-        if sr.status != ServiceRequestStatus.READY or sr.final_price is None:
-            raise HTTPException(status_code=400, detail="Эту заявку сейчас нельзя оплатить")
-        if db_account.balance < float(sr.final_price):
-            return RedirectResponse(url="/shop/account/balance?insufficient=1", status_code=302)
-
-        db_account.balance = round(db_account.balance - float(sr.final_price), 2)
-        sr.status = ServiceRequestStatus.PAID
-        sr.paid_at = datetime.utcnow()
-        await session.commit()
-
-    return RedirectResponse(url=f"/shop/account/service-requests/{request_id}", status_code=302)
 
 
 @router.get("/shop/chat/{conversation_id}", response_class=HTMLResponse)
@@ -1149,18 +944,16 @@ async def account_balance_topup(request: Request, amount: str = Form(...), metho
             referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
             referral_percent=REFERRAL_BONUS_PERCENT, error="Минимальная сумма пополнения — $1.",
         )
-    if method not in ("idram", "oxapay", "stripe"):
+    if method not in ("idram", "oxapay"):
         raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
     if method == "oxapay" and not settings.ENABLE_OXAPAY:
         raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
-    if method == "stripe" and not (settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY):
-        raise HTTPException(status_code=403, detail="Оплата картой (Stripe) временно недоступна")
 
     external_id = str(uuid.uuid4())
     async with get_session() as session:
         top_up = TopUp(
             website_account_id=account.id, amount=amount_value, currency="USD",
-            provider={"idram": PaymentProvider.IDRAM, "oxapay": PaymentProvider.OXAPAY, "stripe": PaymentProvider.STRIPE}[method],
+            provider=PaymentProvider.IDRAM if method == "idram" else PaymentProvider.OXAPAY,
             status=PaymentStatus.PENDING, external_payment_id=external_id,
         )
 
@@ -1168,25 +961,6 @@ async def account_balance_topup(request: Request, amount: str = Form(...), metho
             session.add(top_up)
             await session.commit()
             redirect_url = f"/pay/idram/{external_id}"
-        elif method == "stripe":
-            try:
-                checkout_url = await stripe_pay.create_checkout_session(
-                    amount=amount_value, currency="USD", description="Пополнение баланса",
-                    success_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance?paid=1",
-                    cancel_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance",
-                    client_reference_id=external_id, email=account.email,
-                )
-            except StripePaymentError as exc:
-                return await render(
-                    request, "account_balance.html", balance=account.balance, top_ups=[],
-                    referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
-                    referral_percent=REFERRAL_BONUS_PERCENT,
-                    error=f"Платёжная система временно недоступна: {exc}",
-                )
-            top_up.pay_link = checkout_url
-            session.add(top_up)
-            await session.commit()
-            redirect_url = checkout_url
         else:
             try:
                 invoice = await oxapay_client.create_invoice(

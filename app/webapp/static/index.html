@@ -7,7 +7,7 @@
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Geist:wght@400;500;600;700&family=Noto+Sans+Armenian:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css?v=17">
 </head>
 <body>
@@ -145,6 +145,32 @@
       <div id="products-list" class="list"></div>
     </main>
 
+    <!-- Форма деталей заказа (лаунж/тур) — перед тем как открыть чат -->
+    <main id="screen-order-form" class="screen" hidden>
+      <div class="card">
+        <div class="hint" id="order-form-product-title" style="margin-bottom:14px; font-weight:600; color:var(--text);"></div>
+
+        <div class="field">
+          <label class="field-label" data-i18n="order_form_name"></label>
+          <input id="order-form-name" class="search" type="text">
+        </div>
+        <div class="field">
+          <label class="field-label" data-i18n="order_form_date"></label>
+          <input id="order-form-date" class="search" type="date">
+        </div>
+        <div class="field">
+          <label class="field-label" data-i18n="order_form_guests"></label>
+          <input id="order-form-guests" class="search" type="number" min="1" value="1">
+        </div>
+        <div class="field">
+          <label class="field-label" data-i18n="order_form_comment"></label>
+          <textarea id="order-form-comment" class="search" rows="3" style="resize:vertical;"></textarea>
+        </div>
+
+        <button id="order-form-submit-btn" class="primary-btn" data-i18n="order_form_submit"></button>
+      </div>
+    </main>
+
     <!-- Профиль -->
     <main id="screen-profile" class="screen" hidden>
       <div class="profile-header">
@@ -270,7 +296,7 @@
   <!-- ?v=2 — версия статики. Telegram иногда держит JS/CSS в дисковом кэше даже после
        полного перезапуска приложения; при каждом обновлении app.js/i18n.js/style.css
        увеличивай это число — иначе клиент может продолжать использовать старую версию. -->
-  <script src="/i18n.js?v=9"></script>
-  <script src="/app.js?v=10"></script>
+  <script src="/i18n.js?v=10"></script>
+  <script src="/app.js?v=11"></script>
 </body>
 </html>

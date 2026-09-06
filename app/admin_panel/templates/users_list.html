@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Пользователи — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users" class="active">Пользователи</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Пользователи</h2>
+
+  <form method="get" action="/users" class="field-row" style="margin-bottom:20px; max-width:420px;">
+    <div class="field" style="margin-bottom:0;">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск: имя, username, telegram_id, email"
+             style="width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
+    </div>
+    <button class="btn" type="submit">Найти</button>
+  </form>
+
+  <p class="status-label" style="margin-bottom:8px;">
+    Показаны первые {{ page_limit }} по каждому списку (сначала новые).
+    Баланс правится напрямую — без истории изменений (это не платёж, поэтому в пополнения/TopUp не пишется).
+  </p>
+
+  <h3 style="margin-top:28px;">Бот / Mini App ({{ bot_users|length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Telegram</th>
+        <th>Имя</th>
+        <th>Рефералов оплачено</th>
+        <th>Баланс, $</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in bot_users %}
+      <tr class="no-click">
+        <td class="mono">#{{ u.id }}</td>
+        <td class="mono">{{ u.telegram_id }}{% if u.username %} · @{{ u.username }}{% endif %}</td>
+        <td>{{ u.full_name or "—" }}</td>
+        <td class="status-label">{{ "да" if u.referral_bonus_paid else "нет" }}</td>
+        <td colspan="2">
+          <form method="post" action="/users/bot/{{ u.id }}/balance?q={{ q }}" class="field-row" style="margin-bottom:0; align-items:center;">
+            <input type="number" step="0.01" name="balance" value="{{ '%.2f'|format(u.balance) }}"
+                   style="width:110px; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
+            <button class="btn" type="submit" style="padding:8px 14px;">Сохранить</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="status-label">Никого не нашлось.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:36px;">Сайт ({{ site_accounts|length }})</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Email</th>
+        <th>Подтверждён</th>
+        <th>Регистрация</th>
+        <th>Баланс, $</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in site_accounts %}
+      <tr class="no-click">
+        <td class="mono">#{{ a.id }}</td>
+        <td>{{ a.email }}</td>
+        <td class="status-label">{{ "да" if a.is_verified else "нет" }}</td>
+        <td class="status-label">{{ a.created_at.strftime("%d.%m.%Y") }}</td>
+        <td colspan="2">
+          <form method="post" action="/users/site/{{ a.id }}/balance?q={{ q }}" class="field-row" style="margin-bottom:0; align-items:center;">
+            <input type="number" step="0.01" name="balance" value="{{ '%.2f'|format(a.balance) }}"
+                   style="width:110px; padding:8px 10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
+            <button class="btn" type="submit" style="padding:8px 14px;">Сохранить</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="status-label">Никого не нашлось.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<style>.no-click { cursor: default !important; }</style>
+{% endblock %}

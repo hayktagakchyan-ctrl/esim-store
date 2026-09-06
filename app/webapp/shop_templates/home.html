@@ -10,7 +10,7 @@
 
     <form class="search-cta" action="/shop/catalog" method="get">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <span class="search-cta-placeholder">{{ t('search_placeholder') }}</span>
+      <input class="search-cta-input" type="text" name="q" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
       <button class="btn" type="submit">{{ t("hero_cta") }}</button>
     </form>
 
@@ -88,14 +88,45 @@
   </div>
 </section>
 
-{% if regions %}
 <section class="section section-alt">
+  <div class="container narrow" style="text-align:center;">
+    <p class="eyebrow-badge" style="margin-bottom:16px;">{{ t("coverage_eyebrow") }}</p>
+    <h2 class="section-title center">{{ t("coverage_title") }}</h2>
+  </div>
+  <div class="container">
+    <div class="coverage-visual">
+      <span class="coverage-dot" style="left:15%; top:38%;"></span>
+      <span class="coverage-dot" style="left:26%; top:64%;"></span>
+      <span class="coverage-dot" style="left:47%; top:30%;"></span>
+      <span class="coverage-dot" style="left:50%; top:56%;"></span>
+      <span class="coverage-dot" style="left:60%; top:40%;"></span>
+      <span class="coverage-dot" style="left:71%; top:34%;"></span>
+      <span class="coverage-dot" style="left:80%; top:66%;"></span>
+      <span class="coverage-dot" style="left:36%; top:48%;"></span>
+      {% if regions %}
+      <a class="coverage-hint" href="#regions">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>
+        {{ t("coverage_hint") }}
+      </a>
+      {% else %}
+      <span class="coverage-hint">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg>
+        {{ t("coverage_hint") }}
+      </span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{% if regions %}
+<section class="section" id="regions">
   <div class="container">
     <h2 class="section-title">{{ t("home_regions_title") }}</h2>
-    <div class="list">
+    <div class="country-grid" id="regions-grid">
       {% for r in regions %}
-      <a class="row" href="/shop/country/{{ r.code }}">
-        <span class="flag">🌐</span>
+      <a class="country-tile region-tile {{ 'region-extra' if loop.index0 >= 6 else '' }}" href="/shop/country/{{ r.code }}">
+        {% set icon = r.name|region_icon %}
+        {% if icon %}<img class="flag region-icon-img" src="{{ icon }}" alt="">{% else %}<span class="flag">🌐</span>{% endif %}
         <div>
           <div class="name">{{ r.name }}</div>
           <div class="meta">{{ t("region_from") }} ${{ "%.2f"|format(r.from_price) }}</div>
@@ -103,6 +134,23 @@
       </a>
       {% endfor %}
     </div>
+    {% if regions|length > 6 %}
+    <p style="text-align:center; margin-top:16px;">
+      <button type="button" id="regions-show-all" class="btn secondary">{{ t("home_regions_show_all") }}</button>
+    </p>
+    <script>
+    (function () {
+      var btn = document.getElementById("regions-show-all");
+      var grid = document.getElementById("regions-grid");
+      if (btn && grid) {
+        btn.addEventListener("click", function () {
+          grid.classList.add("expanded");
+          btn.hidden = true;
+        });
+      }
+    })();
+    </script>
+    {% endif %}
   </div>
 </section>
 {% endif %}

@@ -227,7 +227,11 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
   border-radius: var(--radius-md); padding: 14px 18px; box-shadow: var(--shadow-sm); text-align: left;
 }
 .search-cta svg { color: var(--text-secondary); flex-shrink: 0; }
-.search-cta-placeholder { flex: 1; color: var(--text-secondary); font-family: var(--font-body); font-size: 15px; }
+.search-cta-input {
+  flex: 1; border: none; outline: none; background: transparent; color: var(--text);
+  font-family: var(--font-body); font-size: 15px; min-width: 0; padding: 0;
+}
+.search-cta-input::placeholder { color: var(--text-secondary); }
 .search-cta .btn { flex-shrink: 0; }
 
 .promo-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px; justify-content: center; flex-wrap: wrap; }
@@ -262,7 +266,7 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
   text-align: left; background: var(--surface-alt-card); border: 1px solid var(--border);
   border-radius: var(--radius-lg); padding: 28px; display: flex; flex-direction: column; gap: 16px;
 }
-.ghost-num { font-size: 36px; font-weight: 800; color: var(--accent-soft); line-height: 1; }
+.ghost-num { font-size: 36px; font-weight: 800; color: var(--accent-ink); opacity: 0.55; line-height: 1; }
 .steps-ghost .step h3 { font-size: 16px; font-weight: 700; margin: 0; }
 .steps-ghost .step p { font-family: var(--font-body); font-size: 14px; color: var(--text-secondary); margin: 6px 0 0; line-height: 1.5; }
 @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
@@ -286,6 +290,39 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
 .country-tile .name { font-weight: 700; font-size: 14.5px; color: var(--text); }
 .country-tile .top-pick-label { font-family: var(--font-display); font-size: 9px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-ink); margin-top: 2px; }
 .country-tile .tile-rating { margin-left: auto; font-size: 12.5px; color: var(--text-secondary); flex-shrink: 0; }
+.country-tile .meta { font-family: var(--font-body); font-size: 12.5px; color: var(--text-secondary); margin-top: 2px; }
+.region-icon-img { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; background: none; flex-shrink: 0; }
+.country-grid .region-extra { display: none; }
+.country-grid.expanded .region-extra { display: flex; }
+
+/* --- Карта покрытия: абстрактная сетка + светящиеся точки (не настоящая карта) --- */
+.coverage-visual {
+  position: relative; height: 340px; border-radius: var(--radius-xl); overflow: hidden;
+  background: var(--surface-alt-card); border: 1px solid var(--border);
+  background-image: linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.coverage-visual::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(circle at 50% 45%, var(--accent-soft), transparent 60%);
+}
+.coverage-dot {
+  position: absolute; width: 10px; height: 10px; margin: -5px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft), 0 0 16px 4px rgba(45,184,123,0.55);
+  animation: coverage-pulse 2.6s ease-in-out infinite;
+}
+@keyframes coverage-pulse { 0%, 100% { opacity: 0.55; transform: scale(0.85); } 50% { opacity: 1; transform: scale(1.15); } }
+.coverage-hint {
+  position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 10px; background: var(--sidebar-bg);
+  backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 1px solid var(--border);
+  border-radius: 999px; padding: 12px 18px; font-family: var(--font-body); font-size: 13px;
+  color: var(--text); white-space: nowrap; cursor: pointer;
+}
+@media (max-width: 720px) {
+  .coverage-visual { height: 260px; }
+  .coverage-hint { font-size: 12px; padding: 10px 14px; white-space: normal; text-align: center; max-width: 88%; }
+}
 
 .country-row {
   display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: var(--surface);

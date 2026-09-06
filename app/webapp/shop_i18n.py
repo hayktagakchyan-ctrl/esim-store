@@ -329,6 +329,19 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
 
     "home_regions_title": {"ru": "Региональные пакеты", "hy": "Տարածաշրջանային փաթեթներ", "en": "Regional plans"},
     "region_from": {"ru": "от", "hy": "-ից", "en": "from"},
+    "home_regions_show_all": {"ru": "Все направления", "hy": "Բոլոր ուղղությունները", "en": "Show all"},
+
+    "coverage_eyebrow": {"ru": "География покрытия", "hy": "Ծածկույթի աշխարհագրություն", "en": "Coverage"},
+    "coverage_title": {
+        "ru": "Высокоскоростной интернет в любой точке",
+        "hy": "Բարձր արագությամբ ինտերնետ ցանկացած կետում",
+        "en": "High-speed data, everywhere you go",
+    },
+    "coverage_hint": {
+        "ru": "Список стран и регионов — ниже",
+        "hy": "Երկրների և տարածաշրջանների ցանկը՝ ներքևում",
+        "en": "See the full list of countries and regions below",
+    },
 
     "notif_title": {"ru": "Уведомления", "hy": "Ծանուցումներ", "en": "Notifications"},
     "notif_filter_all": {"ru": "Все", "hy": "Բոլորը", "en": "All"},

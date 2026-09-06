@@ -894,7 +894,9 @@ async def product_questions_list(request: Request, product_id: int, _=Depends(re
 @app.post("/products/{product_id}/questions/new")
 async def product_question_create(
     product_id: int,
-    question_text: str = Form(...),
+    question_text_ru: str = Form(...),
+    question_text_hy: str = Form(...),
+    question_text_en: str = Form(...),
     question_type: str = Form(...),
     is_required: bool = Form(False),
     _=Depends(require_login),
@@ -904,7 +906,10 @@ async def product_question_create(
             select(func.count()).select_from(ProductQuestion).where(ProductQuestion.product_id == product_id)
         )).scalar_one()
         session.add(ProductQuestion(
-            product_id=product_id, question_text=question_text.strip(),
+            product_id=product_id,
+            question_text_ru=question_text_ru.strip(),
+            question_text_hy=question_text_hy.strip(),
+            question_text_en=question_text_en.strip(),
             question_type=QuestionType(question_type), is_required=is_required, position=count,
         ))
         await session.commit()

@@ -40,7 +40,10 @@
       {% for q in questions %}
       <tr class="no-click">
         <td class="mono">{{ loop.index }}</td>
-        <td>{{ q.question_text }}</td>
+        <td>
+          {{ q.question_text_ru }}
+          <div class="status-label">հայ.: {{ q.question_text_hy }} · en: {{ q.question_text_en }}</div>
+        </td>
         <td class="status-label">{{ type_labels[q.question_type] }}</td>
         <td class="status-label">{{ "да" if q.is_required else "нет" }}</td>
         <td>
@@ -59,8 +62,16 @@
     <div class="label" style="margin-bottom:12px;">Добавить вопрос</div>
     <form method="post" action="/products/{{ product.id }}/questions/new">
       <div class="field">
-        <div class="label">Текст вопроса</div>
-        <input type="text" name="question_text" required placeholder="Например: Номер рейса и дата">
+        <div class="label">Текст вопроса — русский</div>
+        <input type="text" name="question_text_ru" required placeholder="Например: Номер рейса и дата">
+      </div>
+      <div class="field">
+        <div class="label">Текст вопроса — հայերեն</div>
+        <input type="text" name="question_text_hy" required>
+      </div>
+      <div class="field">
+        <div class="label">Текст вопроса — English</div>
+        <input type="text" name="question_text_en" required>
       </div>
       <div class="field">
         <div class="label">Тип ответа</div>

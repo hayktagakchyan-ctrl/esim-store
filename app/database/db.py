@@ -75,6 +75,34 @@ async def _run_light_migrations(conn) -> None:
     # create_all() новые значения туда не добавляет — только ALTER TYPE, отдельно).
     await conn.execute(text("ALTER TYPE paymentprovider ADD VALUE IF NOT EXISTS 'stripe'"))
 
+    # Вопрос формы заказа стал трёхъязычным (question_text_ru/hy/en вместо
+    # одного question_text) — если таблица уже существует со старой колонкой,
+    # добавляем новые и переносим туда старое значение как отправную точку
+    # (админ потом поправит переводы на hy/en вручную).
+    await conn.execute(text("ALTER TABLE product_questions ADD COLUMN IF NOT EXISTS question_text_ru VARCHAR(500)"))
+    await conn.execute(text("ALTER TABLE product_questions ADD COLUMN IF NOT EXISTS question_text_hy VARCHAR(500)"))
+    await conn.execute(text("ALTER TABLE product_questions ADD COLUMN IF NOT EXISTS question_text_en VARCHAR(500)"))
+    old_column_exists = (await conn.execute(text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='product_questions' AND column_name='question_text'"
+    ))).first()
+    if old_column_exists is not None:
+        for col in ("question_text_ru", "question_text_hy", "question_text_en"):
+            await conn.execute(text(f"UPDATE product_questions SET {col} = question_text WHERE {col} IS NULL"))
+
+    # То же самое для снимка вопроса в ответах (ServiceRequestAnswer) — было
+    # одно поле question_text, стало три (см. комментарий в models.py).
+    await conn.execute(text("ALTER TABLE service_request_answers ADD COLUMN IF NOT EXISTS question_text_ru VARCHAR(500)"))
+    await conn.execute(text("ALTER TABLE service_request_answers ADD COLUMN IF NOT EXISTS question_text_hy VARCHAR(500)"))
+    await conn.execute(text("ALTER TABLE service_request_answers ADD COLUMN IF NOT EXISTS question_text_en VARCHAR(500)"))
+    old_answer_column_exists = (await conn.execute(text(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_name='service_request_answers' AND column_name='question_text'"
+    ))).first()
+    if old_answer_column_exists is not None:
+        for col in ("question_text_ru", "question_text_hy", "question_text_en"):
+            await conn.execute(text(f"UPDATE service_request_answers SET {col} = question_text WHERE {col} IS NULL"))
+
 
 @asynccontextmanager
 async def get_session():

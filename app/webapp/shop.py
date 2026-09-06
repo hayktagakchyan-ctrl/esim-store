@@ -579,7 +579,7 @@ async def service_request_form(request: Request, product_id: int):
         request, "service_request_form.html",
         product={"id": product.id, "title": product.title(lang),
                  "price": float(product.price) if product.price is not None else None, "currency": product.currency},
-        questions=questions,
+        questions=[{"id": q.id, "question_text": q.text(lang), "question_type": q.question_type, "is_required": q.is_required} for q in questions],
     )
 
 
@@ -589,6 +589,7 @@ async def service_request_submit(request: Request, product_id: int):
     if account is None:
         return require_login_redirect(request)
 
+    lang = get_lang(request)
     form = await request.form()
 
     async with get_session() as session:
@@ -607,18 +608,19 @@ async def service_request_submit(request: Request, product_id: int):
         for q in questions:
             answer = ServiceRequestAnswer(
                 service_request_id=sr.id, question_id=q.id,
-                question_text=q.question_text, question_type=q.question_type,
+                question_text_ru=q.question_text_ru, question_text_hy=q.question_text_hy, question_text_en=q.question_text_en,
+                question_type=q.question_type,
             )
             if q.question_type == QuestionType.YES_NO:
                 raw = form.get(f"answer_{q.id}")
                 answer.answer_bool = (raw == "yes") if raw in ("yes", "no") else None
                 if q.is_required and answer.answer_bool is None:
-                    raise HTTPException(status_code=400, detail=f"Ответьте на вопрос: {q.question_text}")
+                    raise HTTPException(status_code=400, detail=f"Ответьте на вопрос: {q.text(lang)}")
             elif q.question_type == QuestionType.TEXT:
                 raw = (form.get(f"answer_{q.id}") or "").strip()
                 answer.answer_text = raw or None
                 if q.is_required and not raw:
-                    raise HTTPException(status_code=400, detail=f"Заполните: {q.question_text}")
+                    raise HTTPException(status_code=400, detail=f"Заполните: {q.text(lang)}")
             else:  # FILE
                 upload = form.get(f"answer_file_{q.id}")
                 if upload is not None and getattr(upload, "filename", ""):
@@ -626,7 +628,7 @@ async def service_request_submit(request: Request, product_id: int):
                     answer.answer_file_path = saved["url"]
                     answer.answer_file_filename = saved["filename"]
                 elif q.is_required:
-                    raise HTTPException(status_code=400, detail=f"Прикрепите файл: {q.question_text}")
+                    raise HTTPException(status_code=400, detail=f"Прикрепите файл: {q.text(lang)}")
             session.add(answer)
 
         await session.commit()
@@ -682,7 +684,7 @@ async def service_request_detail(request: Request, request_id: int):
                 "final_price": float(sr.final_price) if sr.final_price is not None else None,
                 "currency": sr.currency, "admin_note": sr.admin_note,
                 "deliverable_path": sr.deliverable_path, "deliverable_filename": sr.deliverable_filename,
-                "answers": [{"question_text": a.question_text, "question_type": a.question_type.value,
+                "answers": [{"question_text": a.text(lang), "question_type": a.question_type.value,
                              "answer_text": a.answer_text, "answer_bool": a.answer_bool,
                              "answer_file_path": a.answer_file_path, "answer_file_filename": a.answer_file_filename}
                             for a in sr.answers],

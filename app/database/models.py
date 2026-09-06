@@ -332,16 +332,25 @@ class ProductQuestion(Base):
     см. /products/{id}/questions. Если у товара нет ни одного вопроса,
     оформление остаётся через чат (как было раньше) — это осознанный fallback,
     а не баг.
+
+    Текст вопроса — на трёх языках сразу (как title_ru/hy/en у Product), чтобы
+    клиент видел форму на своём языке сайта, а не только на том, на котором
+    её написал админ.
     """
     __tablename__ = "product_questions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     product_id: Mapped[int] = mapped_column(ForeignKey("products.id"), index=True)
-    question_text: Mapped[str] = mapped_column(String(500))
+    question_text_ru: Mapped[str] = mapped_column(String(500))
+    question_text_hy: Mapped[str] = mapped_column(String(500))
+    question_text_en: Mapped[str] = mapped_column(String(500))
     question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType), default=QuestionType.TEXT)
     is_required: Mapped[bool] = mapped_column(Boolean, default=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    def text(self, lang: str) -> str:
+        return {"ru": self.question_text_ru, "hy": self.question_text_hy, "en": self.question_text_en}.get(lang, self.question_text_ru)
 
 
 class ServiceRequestStatus(str, enum.Enum):
@@ -393,16 +402,21 @@ class ServiceRequest(Base):
 
 class ServiceRequestAnswer(Base):
     """
-    Один ответ на один вопрос анкеты. question_text/question_type — СНИМОК на
-    момент ответа (а не только ссылка на ProductQuestion), чтобы если админ
-    потом изменит или удалит вопрос в товаре, старые заявки не потеряли смысл.
+    Один ответ на один вопрос анкеты. question_text_ru/hy/en и question_type —
+    СНИМОК на момент ответа (а не только ссылка на ProductQuestion), чтобы если
+    админ потом изменит или удалит вопрос в товаре, старые заявки не потеряли
+    смысл. Три языка сразу — как и у самого вопроса (ProductQuestion.text) —
+    чтобы админ (обычно смотрит по-русски) и клиент (может быть на hy/en)
+    видели вопрос каждый на своём языке.
     """
     __tablename__ = "service_request_answers"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     service_request_id: Mapped[int] = mapped_column(ForeignKey("service_requests.id"), index=True)
     question_id: Mapped[int | None] = mapped_column(ForeignKey("product_questions.id"), nullable=True)
-    question_text: Mapped[str] = mapped_column(String(500))
+    question_text_ru: Mapped[str] = mapped_column(String(500))
+    question_text_hy: Mapped[str] = mapped_column(String(500))
+    question_text_en: Mapped[str] = mapped_column(String(500))
     question_type: Mapped[QuestionType] = mapped_column(Enum(QuestionType))
 
     answer_text: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -411,6 +425,9 @@ class ServiceRequestAnswer(Base):
     answer_file_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     service_request: Mapped["ServiceRequest"] = relationship(back_populates="answers")
+
+    def text(self, lang: str) -> str:
+        return {"ru": self.question_text_ru, "hy": self.question_text_hy, "en": self.question_text_en}.get(lang, self.question_text_ru)
 
 
 class WebsiteAccount(Base):

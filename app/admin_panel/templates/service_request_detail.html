@@ -29,7 +29,7 @@
     <div class="label" style="margin-bottom:12px;">Ответы клиента</div>
     {% for a in sr.answers %}
     <div class="field">
-      <div class="label">{{ a.question_text }}</div>
+      <div class="label">{{ a.question_text_ru }}</div>
       <div class="value">
         {% if a.question_type.value == "yes_no" %}
           {{ "Да" if a.answer_bool else "Нет" }}

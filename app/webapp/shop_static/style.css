@@ -391,6 +391,16 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
 .field-row { display: flex; gap: 12px; }
 .field-row .field { flex: 1; }
 
+/* --- Показать/скрыть пароль --- */
+.password-field { position: relative; }
+.password-field input { padding-right: 44px; width: 100%; }
+.password-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  width: 32px; height: 32px; border: none; background: none; cursor: pointer;
+  font-size: 16px; color: var(--text-secondary); border-radius: 8px;
+}
+.password-toggle:hover { background: var(--surface-secondary); }
+
 /* --- QR-код --- */
 .qr-image { width: 220px; height: 220px; border-radius: var(--radius-md); background: #fff; padding: 12px; box-shadow: var(--shadow-card); }
 

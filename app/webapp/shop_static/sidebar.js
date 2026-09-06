@@ -45,5 +45,18 @@
         supportForm.submit();
       });
     }
+
+    // Показать/скрыть пароль — кнопка-глазок рядом с полем (регистрация, вход,
+    // смена/сброс пароля). data-target — id поля, которое переключаем.
+    document.querySelectorAll(".password-toggle").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var input = document.getElementById(btn.dataset.target);
+        if (!input) return;
+        var willShow = input.type === "password";
+        input.type = willShow ? "text" : "password";
+        btn.textContent = willShow ? "🙈" : "👁";
+        btn.setAttribute("aria-label", willShow ? "Скрыть пароль" : "Показать пароль");
+      });
+    });
   });
 })();

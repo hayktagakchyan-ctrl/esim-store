@@ -7,65 +7,134 @@
   <title>{% block title %}{{ t("brand") }}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Armenian:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/shop-static/style.css?v=10">
+  <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;600;700;800;900&family=Geist:wght@400;500;600;700&family=Noto+Sans+Armenian:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/shop-static/style.css?v=30">
   <script src="/shop-static/theme.js"></script>
   {% block head %}{% endblock %}
 </head>
 <body>
-  <div class="navbar-wrap">
-    <nav class="navbar">
+  <div class="app-shell" id="app-shell">
+
+    <!-- Верхняя полоса — только на мобильных, открывает боковую панель -->
+    <div class="mobile-topbar">
+      <button id="sidebar-open" class="icon-btn" type="button" aria-label="Меню">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      </button>
       <a class="logo" href="/shop/">
         <img class="brand-logo brand-logo-light" src="/shop-static/img/logo-light.jpg" alt="KaLine">
         <img class="brand-logo brand-logo-dark" src="/shop-static/img/logo-dark.jpg" alt="KaLine">
         {{ t("brand") }}
       </a>
-      <div class="nav-links">
-        <a href="/shop/catalog">{{ t("nav_catalog") }}</a>
-        <a href="/shop/services">{{ t("nav_services") }}</a>
-        <a href="#" id="support-nav-link">{{ t("nav_support") }}</a>
+      <button id="theme-toggle-mobile" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Тема оформления">
+        <span class="knob"></span>
+      </button>
+    </div>
+
+    <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-head">
+        <a class="logo" href="/shop/">
+          <img class="brand-logo brand-logo-light" src="/shop-static/img/logo-light.jpg" alt="KaLine">
+          <img class="brand-logo brand-logo-dark" src="/shop-static/img/logo-dark.jpg" alt="KaLine">
+          <span class="logo-text">{{ t("brand") }}</span>
+        </a>
+        <button id="sidebar-close" class="icon-btn sidebar-close" type="button" aria-label="Закрыть меню">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="6" y1="18" x2="18" y2="6"/></svg>
+        </button>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a class="nav-item" href="/shop/" data-label="{{ t('nav_home') }}" title="{{ t('nav_home') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v9a1 1 0 0 0 1 1h4v-6h4v6h4a1 1 0 0 0 1-1v-9"/></svg></span>
+          <span class="nav-label">{{ t("nav_home") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/catalog" data-label="{{ t('nav_catalog') }}" title="{{ t('nav_catalog') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="M9 3v4a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V3"/><path d="M8 13h8M8 17h5"/></svg></span>
+          <span class="nav-label">{{ t("nav_catalog") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/services" data-label="{{ t('nav_services') }}" title="{{ t('nav_services') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12V8a2 2 0 0 0-2-2h-2.5a3.5 3.5 0 0 0-7 0H6a2 2 0 0 0-2 2v4"/><path d="M4 12h16l-1.2 7.2a2 2 0 0 1-2 1.8H7.2a2 2 0 0 1-2-1.8L4 12Z"/></svg></span>
+          <span class="nav-label">{{ t("nav_services") }}</span>
+        </a>
+        <a class="nav-item" href="#" id="support-nav-link" data-label="{{ t('nav_support') }}" title="{{ t('nav_support') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H8l-5 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z"/></svg></span>
+          <span class="nav-label">{{ t("nav_support") }}</span>
+        </a>
+
         {% if account %}
-          <a href="/shop/account/orders">{{ t("nav_my_orders") }}</a>
-          <a href="/shop/account/chats">{{ t("nav_my_chats") }}</a>
-          <a href="/shop/account/notifications">{{ t("notif_title") }}</a>
-          <a href="/shop/account/balance">{{ t("nav_balance") }}</a>
-          <a href="/shop/account/settings">{{ t("nav_settings") }}</a>
-          <a href="/shop/logout">{{ t("nav_logout") }}</a>
+        <div class="nav-sep" data-label="{{ t('nav_my_orders') }}"></div>
+        <a class="nav-item" href="/shop/account/orders" data-label="{{ t('nav_my_orders') }}" title="{{ t('nav_my_orders') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h9l4 4v16H6z"/><path d="M9 10h6M9 14h6M9 18h3"/></svg></span>
+          <span class="nav-label">{{ t("nav_my_orders") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/account/chats" data-label="{{ t('nav_my_chats') }}" title="{{ t('nav_my_chats') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H8l-4 4Z"/></svg></span>
+          <span class="nav-label">{{ t("nav_my_chats") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/account/notifications" data-label="{{ t('notif_title') }}" title="{{ t('notif_title') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg></span>
+          <span class="nav-label">{{ t("notif_title") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/account/balance" data-label="{{ t('nav_balance') }}" title="{{ t('nav_balance') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/><circle cx="16" cy="14.5" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+          <span class="nav-label">{{ t("nav_balance") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/account/settings" data-label="{{ t('nav_settings') }}" title="{{ t('nav_settings') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.9.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.9V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg></span>
+          <span class="nav-label">{{ t("nav_settings") }}</span>
+        </a>
+        <a class="nav-item" href="/shop/logout" data-label="{{ t('nav_logout') }}" title="{{ t('nav_logout') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></span>
+          <span class="nav-label">{{ t("nav_logout") }}</span>
+        </a>
         {% else %}
-          <a href="/shop/login">{{ t("nav_login") }}</a>
-          <a class="cta" href="/shop/register">{{ t("nav_register") }}</a>
+        <div class="nav-sep"></div>
+        <a class="nav-item" href="/shop/login" data-label="{{ t('nav_login') }}" title="{{ t('nav_login') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></span>
+          <span class="nav-label">{{ t("nav_login") }}</span>
+        </a>
+        <a class="nav-item nav-item-cta" href="/shop/register" data-label="{{ t('nav_register') }}" title="{{ t('nav_register') }}">
+          <span class="nav-icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+          <span class="nav-label">{{ t("nav_register") }}</span>
+        </a>
         {% endif %}
+      </nav>
+
+      <div class="sidebar-foot">
         <div class="lang-switch">
           <a href="/shop/set-lang/ru?next={{ request.url.path }}" class="{{ 'active' if lang == 'ru' else '' }}">RU</a>
           <a href="/shop/set-lang/hy?next={{ request.url.path }}" class="{{ 'active' if lang == 'hy' else '' }}">ՀՀ</a>
           <a href="/shop/set-lang/en?next={{ request.url.path }}" class="{{ 'active' if lang == 'en' else '' }}">EN</a>
         </div>
-        <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Тема оформления">
-          <span class="knob"></span>
-        </button>
+        <div class="sidebar-foot-row">
+          <button id="theme-toggle" class="theme-toggle" type="button" role="switch" aria-checked="false" aria-label="Тема оформления">
+            <span class="knob"></span>
+          </button>
+          <button id="sidebar-collapse" class="icon-btn collapse-btn" type="button" aria-label="Свернуть меню">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v16"/><path d="M14 9l-3 3 3 3"/><rect x="3" y="4" width="18" height="16" rx="3"/></svg>
+          </button>
+        </div>
       </div>
-    </nav>
-  </div>
+    </aside>
 
-  {% block body %}{% endblock %}
+    <main class="main-content">
+      {% block body %}{% endblock %}
+
+      <div class="footer">
+        <div class="container">
+          {{ t("footer_bot_teaser") }}
+          <div style="margin-top:10px;">
+            <a href="/shop/privacy">{{ t("footer_privacy_link") }}</a>
+            &nbsp;·&nbsp;
+            <a href="/shop/terms">{{ t("footer_terms_link") }}</a>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
 
   <form id="start-support-form" method="post" action="/shop/chat/start" hidden></form>
-  <script>
-    document.getElementById("support-nav-link").addEventListener("click", function (e) {
-      e.preventDefault();
-      document.getElementById("start-support-form").submit();
-    });
-  </script>
-
-  <div class="footer">
-    <div class="container">
-      {{ t("footer_bot_teaser") }}
-      <div style="margin-top:10px;">
-        <a href="/shop/privacy">{{ t("footer_privacy_link") }}</a>
-        &nbsp;·&nbsp;
-        <a href="/shop/terms">{{ t("footer_terms_link") }}</a>
-      </div>
-    </div>
-  </div>
+  <script src="/shop-static/sidebar.js"></script>
 </body>
 </html>

@@ -20,26 +20,29 @@
    ============================================================ */
 
 :root {
-  --bg: #F4F5FA;
+  --bg: #F6F7F9;
   --surface: #FFFFFF;
-  --surface-secondary: #ECEEF7;
-  --border: #E1E3F0;
-  --text: #14162B;
-  --text-secondary: #6B6E85;
-  --text-tertiary: #A6A9C0;
-  --accent: #1F7D53;
-  --accent-gradient: linear-gradient(135deg, #255F38 0%, #1F7D53 100%);
+  --surface-secondary: #EEF0F3;
+  --border: #E3E5EA;
+  --text: #12141C;
+  --text-secondary: #565F6D;
+  --text-tertiary: #8B93A0;
+  --accent: #2DB87B;
+  --accent-gradient: linear-gradient(135deg, #178556 0%, #2DB87B 100%);
+  --icon-bg-gradient: linear-gradient(135deg, #E3F5EC 0%, #D6F0E3 100%);
   --danger: #FF3B30;
-  --success: #34C759;
-  --radius-lg: 26px;
+  --success: #178556;
+  --radius-lg: 24px;
   --radius-md: 18px;
-  --radius-sm: 12px;
-  --shadow-card: 0 1px 2px rgba(20,22,50,0.05), 0 10px 28px rgba(20,22,50,0.07);
-  --shadow-float: 0 10px 34px rgba(20,22,50,0.14), 0 2px 8px rgba(20,22,50,0.06);
-  --glow-1: rgba(31, 125, 83, 0.09);
-  --glow-2: rgba(37, 95, 56, 0.09);
-  --glass-bg: rgba(244, 245, 250, 0.80);
-  --glass-border: rgba(20, 22, 50, 0.06);
+  --radius-sm: 14px;
+  --shadow-card: 0 1px 2px rgba(18,20,28,0.05), 0 10px 28px rgba(18,20,28,0.07);
+  --shadow-float: 0 10px 34px rgba(18,20,28,0.12), 0 2px 8px rgba(18,20,28,0.05);
+  --glow-1: rgba(45, 184, 123, 0.09);
+  --glow-2: rgba(23, 133, 86, 0.09);
+  --glass-bg: rgba(246, 247, 249, 0.80);
+  --glass-border: rgba(18, 20, 28, 0.06);
+  --font-display: 'Unbounded', 'Noto Sans Armenian', sans-serif;
+  --font-body: 'Geist', 'Noto Sans Armenian', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 /* Тёмная тема — глубокий navy (не чистый чёрный, ближе к "deep space" из брифа),
@@ -62,6 +65,7 @@
   --glow-2: rgba(36, 152, 95, 0.10);
   --glass-bg: rgba(18, 20, 28, 0.8);
   --glass-border: rgba(255, 255, 255, 0.08);
+  --icon-bg-gradient: linear-gradient(135deg, #16231C 0%, #0E1712 100%);
 }
 [data-theme="dark"] .card,
 [data-theme="dark"] .row,
@@ -72,7 +76,7 @@
 }
 [data-theme="dark"] .category-emoji,
 [data-theme="dark"] .feature-card .icon {
-  background: linear-gradient(180deg, #27391C 0%, #18230F 100%);
+  background: linear-gradient(180deg, #16231C 0%, #0E1712 100%);
 }
 
 body { transition: background-color 0.2s ease, color 0.2s ease; }
@@ -94,10 +98,14 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   position: relative;
   overflow-x: hidden;
+}
+h1, h2, h3, .search-kicker, .search-title, .esims-count, .topbar h1,
+.section-heading, .category-title, .checkout-hero-price {
+  font-family: var(--font-display);
 }
 
 /* Мягкое размытое свечение на фоне — то же решение, что и на сайте, для
@@ -165,7 +173,7 @@ body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
   padding: 5px 9px;
   border-radius: 999px;
 }
-.lang-btn.active { color: #fff; background: var(--accent-gradient); }
+.lang-btn.active { color: #08090D; background: var(--accent-gradient); }
 
 .theme-toggle {
   display: flex; align-items: center; gap: 6px;
@@ -372,10 +380,10 @@ main.screen[hidden] { display: none !important; }
   border: none;
   border-radius: var(--radius-md);
   background: var(--accent-gradient);
-  color: #fff;
+  color: #08090D;
   font-size: 16px;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(31, 125, 83, 0.32);
+  box-shadow: 0 4px 14px rgba(45, 184, 123, 0.32);
 }
 .primary-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(31,125,83,0.28); }
 .primary-btn.test-btn {
@@ -452,7 +460,7 @@ main.screen[hidden] { display: none !important; }
   border-radius: 14px;
   border: none;
   background: var(--accent-gradient);
-  color: #fff;
+  color: #08090D;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -474,7 +482,7 @@ main.screen[hidden] { display: none !important; }
   white-space: nowrap;
   cursor: pointer;
 }
-.promo-pill.active { background: var(--accent-gradient); color: #fff; }
+.promo-pill.active { background: var(--accent-gradient); color: #08090D; }
 
 /* --- Сердечко избранного на строке страны --- */
 .fav-heart-btn {
@@ -557,7 +565,7 @@ main.screen[hidden] { display: none !important; }
 .profile-header { display: flex; flex-direction: column; align-items: center; padding: 16px 0 20px; }
 .profile-avatar {
   width: 64px; height: 64px; border-radius: 50%;
-  background: var(--accent-gradient); color: #fff;
+  background: var(--accent-gradient); color: #08090D;
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 700; margin-bottom: 10px;
 }
@@ -574,7 +582,7 @@ main.screen[hidden] { display: none !important; }
   width: 48px; height: 48px;
   border-radius: 50%;
   background: var(--accent-gradient);
-  color: #fff;
+  color: #08090D;
   border: none;
   display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-float);
@@ -659,7 +667,7 @@ main.screen[hidden] { display: none !important; }
   border: none;
   border-radius: 999px;
   background: var(--accent-gradient);
-  color: #fff;
+  color: #08090D;
   font-size: 13px;
   font-weight: 600;
 }
@@ -702,7 +710,7 @@ main.screen[hidden] { display: none !important; }
   border-radius: 50%;
   border: none;
   background: var(--accent-gradient);
-  color: #fff;
+  color: #08090D;
   font-size: 15px;
   flex-shrink: 0;
 }

@@ -836,18 +836,21 @@ async def _send_verification_email(session, account: WebsiteAccount) -> None:
     await session.commit()
 
     verify_link = f"{settings.PUBLIC_BASE_URL}/shop/verify-email/{token}"
-    sent = send_email(
+    sent, error = send_email(
         to=account.email, subject="Подтверди email — eSIM Store",
         body=f"Перейди по ссылке, чтобы подтвердить email и получить доступ к покупкам и чатам "
              f"(ссылка действует 48 часов):\n{verify_link}",
     )
     if not sent:
-        # SMTP ещё не настроен — дублируем ссылку в бот поддержки, чтобы можно было тестировать.
+        # Либо SMTP вообще не настроен (нормально для теста), либо настроен, но
+        # реально не смог отправить (неверный пароль/порт и т.п.) — это разные
+        # ситуации, поэтому не подписываем всё подряд как "не настроен".
+        reason = "SMTP не настроен" if error == "not_configured" else f"ошибка отправки — {error}"
         try:
             await support_notify_bot.send_message(
                 chat_id=settings.SUPPORT_CHAT_ID,
                 text=f"✉️ Подтверждение email\nEmail: {account.email}\n"
-                     f"Ссылка (SMTP не настроен, письмо не отправлено): {verify_link}",
+                     f"Ссылка ({reason}, письмо не отправлено): {verify_link}",
             )
         except Exception:
             pass
@@ -1022,16 +1025,16 @@ async def forgot_password_submit(request: Request, email: str = Form(...)):
             await session.commit()
 
             reset_link = f"{settings.PUBLIC_BASE_URL}/shop/reset-password/{token}"
-            sent = send_email(
+            sent, error = send_email(
                 to=email, subject="Восстановление пароля — eSIM Store",
                 body=f"Перейдите по ссылке, чтобы задать новый пароль (ссылка действует 2 часа):\n{reset_link}",
             )
             if not sent:
-                # SMTP ещё не настроен — дублируем ссылку в бот поддержки, чтобы можно было тестировать.
+                reason = "SMTP не настроен" if error == "not_configured" else f"ошибка отправки — {error}"
                 try:
                     await support_notify_bot.send_message(
                         chat_id=settings.SUPPORT_CHAT_ID,
-                        text=f"🔑 Запрос сброса пароля\nEmail: {email}\nСсылка (SMTP не настроен, письмо не отправлено): {reset_link}",
+                        text=f"🔑 Запрос сброса пароля\nEmail: {email}\nСсылка ({reason}, письмо не отправлено): {reset_link}",
                     )
                 except Exception:
                     pass

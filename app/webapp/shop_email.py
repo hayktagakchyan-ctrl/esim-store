@@ -1,26 +1,34 @@
 """
-Отправка писем (сейчас — только восстановление пароля) через стандартный
+Отправка писем (подтверждение email, восстановление пароля) через стандартный
 smtplib, без сторонних библиотек — та же логика, что и с хешированием пароля:
 не добавлять зависимостей, которые могут не встать на Windows без компилятора.
 
 Работает с ЛЮБЫМ SMTP-провайдером (Gmail, Yandex, свой домен, транзакционные
 сервисы вроде SendGrid/Mailgun через их SMTP-интерфейс) — просто нужны
-правильные SMTP_* в .env.
+правильные SMTP_* в .env/переменных окружения.
 
-Если SMTP_HOST не задан — письмо не отправляется, функция возвращает False,
-и вызывающий код (app/webapp/shop.py) сам решает, что показать пользователю
-и продублировать ли ссылку в бот поддержки для тестирования.
+Если SMTP_HOST не задан — считаем, что почта осознанно не настроена (это
+нормально для теста), функция возвращает (False, "not_configured").
+Если SMTP_HOST задан, но отправка всё равно не удалась (неверный пароль,
+не тот порт, провайдер заблокировал вход и т.п.) — это уже РЕАЛЬНАЯ ошибка,
+не "не настроено"; возвращаем (False, "<текст ошибки>") и пишем её в лог
+(Railway показывает print/logging в логах сервиса), чтобы не гадать вслепую,
+почему письма не уходят, если .env вроде бы заполнен.
 """
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
 from app.config import settings
 
+email_logger = logging.getLogger("email")
 
-def send_email(to: str, subject: str, body: str) -> bool:
+
+def send_email(to: str, subject: str, body: str) -> tuple[bool, str | None]:
+    """Возвращает (True, None) при успехе, иначе (False, "not_configured" | "<текст ошибки>")."""
     if not settings.SMTP_HOST:
-        return False
+        return False, "not_configured"
 
     message = MIMEText(body, "plain", "utf-8")
     message["Subject"] = subject
@@ -37,6 +45,9 @@ def send_email(to: str, subject: str, body: str) -> bool:
             if settings.SMTP_USERNAME:
                 server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
             server.sendmail(settings.SMTP_FROM_EMAIL, [to], message.as_string())
-        return True
-    except Exception:
-        return False
+        return True, None
+    except Exception as e:
+        error_text = f"{type(e).__name__}: {e}"
+        email_logger.error("Не удалось отправить письмо на %s через %s:%s — %s",
+                            to, settings.SMTP_HOST, settings.SMTP_PORT, error_text)
+        return False, error_text

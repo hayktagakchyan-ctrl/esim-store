@@ -39,18 +39,41 @@ async def init_db() -> None:
     процессов одновременно пытались создать таблицы в пустой базе, и часть таблиц
     (например webhook_events) не успевала создаться. advisory lock Postgres не
     даёт второму и третьему сервису начать создание таблиц, пока первый не закончит.
+
+    Важно: используем именно pg_advisory_XACT_lock (а не pg_advisory_lock +
+    ручной unlock) — он снимается автоматически ровно в момент COMMIT/ROLLBACK
+    этой же транзакции. Раньше был pg_advisory_lock с ручным unlock ДО commit —
+    это оставляло окно, где второй сервис снимал блокировку, видел ещё
+    незакоммиченный CREATE TABLE как "таблицы нет" (READ COMMITTED не видит
+    чужой незакоммиченный DDL) и пытался создать её же — Postgres отвечал
+    "relation already exists", и сервис падал при старте (воспроизвелось на
+    проде при добавлении новых таблиц). pg_advisory_xact_lock не отпускает
+    лок, пока CREATE TABLE не закоммитится по-настоящему — гонка невозможна.
+
     На SQLite (локальная разработка) такого типа блокировки нет — там гонки в
     принципе не бывает (обычно только один процесс работает с локальным файлом),
     поэтому просто пропускаем этот шаг.
     """
     async with engine.begin() as conn:
         if engine.dialect.name == "postgresql":
-            await conn.execute(text("SELECT pg_advisory_lock(727272)"))
-        try:
-            await conn.run_sync(Base.metadata.create_all)
-        finally:
-            if engine.dialect.name == "postgresql":
-                await conn.execute(text("SELECT pg_advisory_unlock(727272)"))
+            await conn.execute(text("SELECT pg_advisory_xact_lock(727272)"))
+        await conn.run_sync(Base.metadata.create_all)
+        await _run_light_migrations(conn)
+
+
+async def _run_light_migrations(conn) -> None:
+    """
+    create_all() создаёт только отсутствующие ТАБЛИЦЫ — новые колонки в уже
+    существующих таблицах он не добавляет. Пока в проекте нет Alembic (см.
+    комментарий выше), безопасные добавления колонок делаем тут вручную, через
+    IF NOT EXISTS — выполнить это повторно (на каждом старте) ничего не сломает.
+    """
+    if conn.dialect.name != "postgresql":
+        return  # ALTER ... IF NOT EXISTS в этом виде — синтаксис Postgres; на SQLite (локально) не нужно
+    await conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link_url VARCHAR(512)"))
+    # Новое значение enum-а (Postgres хранит PaymentProvider как настоящий ENUM-тип в БД,
+    # create_all() новые значения туда не добавляет — только ALTER TYPE, отдельно).
+    await conn.execute(text("ALTER TYPE paymentprovider ADD VALUE IF NOT EXISTS 'stripe'"))
 
 
 @asynccontextmanager

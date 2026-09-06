@@ -115,13 +115,6 @@ const I18N = {
   products_empty: { ru: "Пока нет предложений — загляни позже", hy: "Առաջարկներ դեռ չկան, ստուգիր ավելի ուշ", en: "Nothing here yet — check back later" },
   product_ask_button: { ru: "Спросить в чате", hy: "Հարցնել չաթում", en: "Ask in chat" },
 
-  order_form_title: { ru: "Детали заказа", hy: "Պատվերի մանրամասներ", en: "Order details" },
-  order_form_name: { ru: "Ваше имя", hy: "Ձեր անունը", en: "Your name" },
-  order_form_date: { ru: "Дата", hy: "Ամսաթիվ", en: "Date" },
-  order_form_guests: { ru: "Количество человек", hy: "Հյուրերի քանակը", en: "Number of guests" },
-  order_form_comment: { ru: "Комментарий", hy: "Մեկնաբանություն", en: "Comment" },
-  order_form_submit: { ru: "Отправить заявку", hy: "Ուղարկել հայտը", en: "Send request" },
-
   chats_empty: { ru: "Пока нет ни одного чата", hy: "Դեռ ոչ մի չաթ չկա", en: "No chats yet" },
   chats_new_support: { ru: "🆘 Написать в поддержку", hy: "🆘 Գրել աջակցությանը", en: "🆘 Contact support" },
   chat_input_placeholder: { ru: "Напиши сообщение…", hy: "Գրիր հաղորդագրություն…", en: "Type a message…" },

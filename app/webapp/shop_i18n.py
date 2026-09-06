@@ -7,6 +7,7 @@ from fastapi import Request
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "brand": {"ru": "KaLine", "hy": "KaLine", "en": "KaLine"},
 
+    "nav_home": {"ru": "Главная", "hy": "Գլխավոր", "en": "Home"},
     "nav_catalog": {"ru": "Тарифы", "hy": "Սակագներ", "en": "Plans"},
     "nav_services": {"ru": "Другие услуги", "hy": "Այլ ծառայություններ", "en": "Other services"},
     "nav_login": {"ru": "Войти", "hy": "Մուտք", "en": "Log in"},
@@ -15,6 +16,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "nav_my_orders": {"ru": "Мои заказы", "hy": "Իմ պատվերները", "en": "My orders"},
     "nav_my_chats": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
 
+    "hero_badge": {
+        "ru": "Твой цифровой роуминг",
+        "hy": "Քո թվային ռոումինգը",
+        "en": "Your digital roaming",
+    },
     "hero_title": {
         "ru": "Интернет в поездке — за пару минут",
         "hy": "Ինտերնետ ճամփորդության ընթացքում՝ մի քանի րոպեում",
@@ -57,6 +63,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
 
     "catalog_title": {"ru": "Выбери страну", "hy": "Ընտրիր երկիրը", "en": "Choose a country"},
+    "home_view_all": {"ru": "Все направления", "hy": "Բոլոր ուղղությունները", "en": "All destinations"},
+    "home_top_pick": {"ru": "Топ выбор", "hy": "Թոփ ընտրություն", "en": "Top pick"},
     "back_to_countries": {"ru": "← Все страны", "hy": "← Բոլոր երկրները", "en": "← All countries"},
     "back_to_plans": {"ru": "← Назад к тарифам", "hy": "← Հետ սակագներին", "en": "← Back to plans"},
 
@@ -68,6 +76,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "checkout_pay_idram": {"ru": "Оплатить картой через Idram", "hy": "Վճարել քարտով Idram-ով", "en": "Pay by card via Idram"},
     "checkout_pay_oxapay": {"ru": "Оплатить криптовалютой", "hy": "Վճարել կրիպտոարժույթով", "en": "Pay with crypto"},
+    "checkout_pay_stripe": {"ru": "Оплатить картой (Stripe)", "hy": "Վճարել քարտով (Stripe)", "en": "Pay by card (Stripe)"},
     "checkout_hint": {
         "ru": "После оплаты откроется страница заказа с QR-кодом активации — сохрани на неё ссылку.",
         "hy": "Վճարումից հետո կբացվի պատվերի էջը՝ ակտիվացման QR-կոդով։",
@@ -133,11 +142,30 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "services_title": {"ru": "Другие услуги", "hy": "Այլ ծառայություններ", "en": "Other services"},
     "services_empty": {"ru": "Пока ничего нет — загляните позже.", "hy": "Դեռ ոչինչ չկա։", "en": "Nothing here yet — check back later."},
     "product_ask_button": {"ru": "Спросить в чате", "hy": "Հարցնել չաթում", "en": "Ask in chat"},
-    "order_form_name": {"ru": "Ваше имя", "hy": "Ձեր անունը", "en": "Your name"},
-    "order_form_date": {"ru": "Дата", "hy": "Ամսաթիվ", "en": "Date"},
-    "order_form_guests": {"ru": "Количество человек", "hy": "Հյուրերի քանակը", "en": "Number of guests"},
-    "order_form_comment": {"ru": "Комментарий", "hy": "Մեկնաբանություն", "en": "Comment"},
-    "order_form_submit": {"ru": "Отправить заявку", "hy": "Ուղարկել հայտը", "en": "Send request"},
+    "product_order_button": {"ru": "Заказать", "hy": "Պատվիրել", "en": "Order"},
+    "product_estimated_price": {"ru": "Ориентировочная цена", "hy": "Մոտավոր գին", "en": "Estimated price"},
+    "answer_yes": {"ru": "Да", "hy": "Այո", "en": "Yes"},
+    "answer_no": {"ru": "Нет", "hy": "Ոչ", "en": "No"},
+    "service_request_submit": {"ru": "Отправить заявку", "hy": "Ուղարկել հայտը", "en": "Submit request"},
+    "nav_service_requests": {"ru": "Мои заявки", "hy": "Իմ հայտերը", "en": "My requests"},
+    "service_status_submitted": {"ru": "На рассмотрении", "hy": "Դիտարկման փուլում", "en": "Under review"},
+    "service_status_ready": {"ru": "Готово к оплате", "hy": "Պատրաստ է վճարման", "en": "Ready to pay"},
+    "service_status_paid": {"ru": "Оплачено", "hy": "Վճարված է", "en": "Paid"},
+    "service_status_cancelled": {"ru": "Отклонено", "hy": "Մերժված է", "en": "Declined"},
+    "service_status_submitted_hint": {
+        "ru": "Мы рассматриваем заявку — как только всё будет готово, придёт уведомление с оплатой.",
+        "hy": "Հայտը դիտարկման փուլում է․ երբ ամեն ինչ պատրաստ լինի, կստանաք ծանուցում վճարման համար։",
+        "en": "We're reviewing your request — you'll get a notification with payment once it's ready.",
+    },
+    "service_admin_note": {"ru": "Комментарий", "hy": "Մեկնաբանություն", "en": "Note"},
+    "service_pay_balance_button": {"ru": "Оплатить с баланса", "hy": "Վճարել հաշվեկշռից", "en": "Pay from balance"},
+    "service_insufficient_balance": {
+        "ru": "Недостаточно средств на балансе — пополните его, чтобы оплатить.",
+        "hy": "Հաշվեկշիռը բավարար չէ․ համալրեք այն վճարելու համար։",
+        "en": "Not enough balance — top up to pay.",
+    },
+    "service_download_button": {"ru": "Скачать файл", "hy": "Ներբեռնել ֆայլը", "en": "Download file"},
+    "notif_open_btn": {"ru": "Открыть", "hy": "Բացել", "en": "Open"},
     "my_chats_title": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
     "my_chats_empty": {"ru": "Пока нет ни одного чата.", "hy": "Դեռ ոչ մի չաթ չկա։", "en": "No chats yet."},
     "new_support_chat": {"ru": "🆘 Написать в поддержку", "hy": "🆘 Գրել աջակցությանը", "en": "🆘 Contact support"},
@@ -152,9 +180,9 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "status_refunded": {"ru": "Возврат оформлен", "hy": "Վերադարձը կատարված է", "en": "Refunded"},
 
     "footer_bot_teaser": {
-        "ru": "Также в нашем Telegram-боте: доступ в лаунж-зоны аэропортов и туры.",
-        "hy": "Նաև մեր Telegram-բոտում՝ օդանավակայանի լաունջ հասանելիություն և տուրեր։",
-        "en": "Also in our Telegram bot: airport lounge access and tours.",
+        "ru": "Твой цифровой роуминг — eSIM, доступ в лаунж-зоны и туры в одном месте.",
+        "hy": "Քո թվային ռոումինգը՝ eSIM, լաունջ հասանելիություն և տուրեր մեկ վայրում։",
+        "en": "Your digital roaming — eSIM, lounge access and tours in one place.",
     },
 
     "footer_privacy_link": {"ru": "Политика конфиденциальности", "hy": "Գաղտնիության քաղաքականություն", "en": "Privacy Policy"},
@@ -182,7 +210,7 @@ eSIM. Мы не продаём и не передаём твои данные н
 <p><strong>Сколько храним.</strong> Пока существует твой аккаунт, либо пока это требуется по
 закону (например, для бухгалтерского учёта).</p>
 <p><strong>Твои права.</strong> Можешь запросить удаление аккаунта и своих данных — напиши в
-поддержку через бот.</p>
+поддержку через сайт.</p>
 """,
         "hy": """
 <p><strong>Ինչ տվյալներ ենք հավաքում։</strong> Էլ. փոստ և գաղտնաբառ (պահվում է ոչ
@@ -326,6 +354,19 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
 
     "home_regions_title": {"ru": "Региональные пакеты", "hy": "Տարածաշրջանային փաթեթներ", "en": "Regional plans"},
     "region_from": {"ru": "от", "hy": "-ից", "en": "from"},
+    "home_regions_show_all": {"ru": "Все направления", "hy": "Բոլոր ուղղությունները", "en": "Show all"},
+
+    "coverage_eyebrow": {"ru": "География покрытия", "hy": "Ծածկույթի աշխարհագրություն", "en": "Coverage"},
+    "coverage_title": {
+        "ru": "Высокоскоростной интернет в любой точке",
+        "hy": "Բարձր արագությամբ ինտերնետ ցանկացած կետում",
+        "en": "High-speed data, everywhere you go",
+    },
+    "coverage_hint": {
+        "ru": "Список стран и регионов — ниже",
+        "hy": "Երկրների և տարածաշրջանների ցանկը՝ ներքևում",
+        "en": "See the full list of countries and regions below",
+    },
 
     "notif_title": {"ru": "Уведомления", "hy": "Ծանուցումներ", "en": "Notifications"},
     "notif_filter_all": {"ru": "Все", "hy": "Բոլորը", "en": "All"},
@@ -357,9 +398,9 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
     },
     "faq_q3": {"ru": "Что если оплата прошла, а eSIM не пришёл?", "hy": "Իսկ եթե վճարումը եղավ, բայց eSIM-ը չեկա՞վ", "en": "What if I paid but didn't receive the eSIM?"},
     "faq_a3": {
-        "ru": "Напиши нам в поддержку прямо на сайте (кнопка в шапке) или в Telegram-боте — разберёмся быстро.",
-        "hy": "Գրիր մեզ աջակցությանը կայքում (կոճակը վերևում) կամ Telegram-բոտում — արագ կլուծենք։",
-        "en": "Message support right here on the site (button in the header) or via the Telegram bot — we'll sort it out fast.",
+        "ru": "Напиши нам в поддержку прямо на сайте (кнопка в шапке) — разберёмся быстро.",
+        "hy": "Գրիր մեզ աջակցությանը կայքում (կոճակը վերևում) — արագ կլուծենք։",
+        "en": "Message support right here on the site (button in the header) — we'll sort it out fast.",
     },
     "faq_q4": {"ru": "На каких устройствах работает eSIM?", "hy": "Ո՞ր սարքերում է աշխատում eSIM-ը", "en": "Which devices support eSIM?"},
     "faq_a4": {

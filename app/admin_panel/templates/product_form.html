@@ -4,11 +4,16 @@
 <div class="topbar">
   <div class="brand"><span class="dot"></span> eSIM Store</div>
   <nav class="topnav">
+    <a href="/dashboard">Дашборд</a>
     <a href="/orders">Заказы</a>
     <a href="/packages">Пакеты</a>
     <a href="/products" class="active">Товары</a>
     <a href="/categories">Категории</a>
     <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
   </nav>
   <a class="logout" href="/logout">Выйти</a>
 </div>
@@ -75,6 +80,14 @@
   </div>
 
   {% if product %}
+  <div class="card">
+    <div class="label" style="margin-bottom:8px;">Форма заказа</div>
+    <p class="status-label" style="margin-bottom:12px;">
+      Если добавить сюда вопросы, клиент будет заполнять форму вместо чата.
+      Без вопросов — оформление, как раньше, через чат.
+    </p>
+    <a class="btn" href="/products/{{ product.id }}/questions">Настроить вопросы формы</a>
+  </div>
   <div class="card">
     <form method="post" action="/products/{{ product.id }}/delete" onsubmit="return confirm('Удалить товар?');">
       <button class="btn danger" type="submit">Удалить товар</button>

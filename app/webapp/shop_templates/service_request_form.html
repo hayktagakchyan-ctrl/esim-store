@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}{{ product.title }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ product.title }}</h2>
+    {% if product.price is not none %}<p class="hint">{{ t("product_estimated_price") }}: {{ product.price }} {{ product.currency }}</p>{% endif %}
+
+    <form method="post" action="/shop/services/product/{{ product.id }}/request" enctype="multipart/form-data" class="card" style="margin-top:16px;">
+      {% for q in questions %}
+      <div class="field">
+        <label style="display:block; font-weight:600; margin-bottom:8px;">
+          {{ q.question_text }}{% if q.is_required %} <span class="error">*</span>{% endif %}
+        </label>
+
+        {% if q.question_type.value == "yes_no" %}
+        <div style="display:flex; gap:16px;">
+          <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
+            <input type="radio" name="answer_{{ q.id }}" value="yes" {{ 'required' if q.is_required }}> {{ t("answer_yes") }}
+          </label>
+          <label style="display:flex; align-items:center; gap:6px; font-weight:400;">
+            <input type="radio" name="answer_{{ q.id }}" value="no" {{ 'required' if q.is_required }}> {{ t("answer_no") }}
+          </label>
+        </div>
+        {% elif q.question_type.value == "text" %}
+        <textarea name="answer_{{ q.id }}" rows="3" {{ 'required' if q.is_required }}
+                  style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:14px;"></textarea>
+        {% else %}
+        <input type="file" name="answer_file_{{ q.id }}" {{ 'required' if q.is_required }}>
+        {% endif %}
+      </div>
+      {% endfor %}
+
+      <button class="btn block" type="submit">{{ t("service_request_submit") }}</button>
+    </form>
+  </div>
+</section>
+{% endblock %}

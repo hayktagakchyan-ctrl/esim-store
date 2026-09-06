@@ -48,9 +48,22 @@ async def init_db() -> None:
             await conn.execute(text("SELECT pg_advisory_lock(727272)"))
         try:
             await conn.run_sync(Base.metadata.create_all)
+            await _run_light_migrations(conn)
         finally:
             if engine.dialect.name == "postgresql":
                 await conn.execute(text("SELECT pg_advisory_unlock(727272)"))
+
+
+async def _run_light_migrations(conn) -> None:
+    """
+    create_all() создаёт только отсутствующие ТАБЛИЦЫ — новые колонки в уже
+    существующих таблицах он не добавляет. Пока в проекте нет Alembic (см.
+    комментарий выше), безопасные добавления колонок делаем тут вручную, через
+    IF NOT EXISTS — выполнить это повторно (на каждом старте) ничего не сломает.
+    """
+    if conn.dialect.name != "postgresql":
+        return  # ALTER ... IF NOT EXISTS в этом виде — синтаксис Postgres; на SQLite (локально) не нужно
+    await conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link_url VARCHAR(512)"))
 
 
 @asynccontextmanager

@@ -65,6 +65,11 @@
 }
 
 * { box-sizing: border-box; }
+/* [hidden] должен работать ВСЕГДА, даже если у элемента есть свой display
+   через класс (.country-tile, .row и т.д.) — иначе поиск/фильтры, которые
+   прячут строки через element.hidden, визуально не работают (ровно этот
+   баг был у поиска и кнопок Европа/Азия в каталоге). */
+[hidden] { display: none !important; }
 html, body { margin: 0; padding: 0; }
 body {
   background: var(--bg);

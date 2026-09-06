@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Заявки на услуги — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests" class="active">Заявки</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Заявки на услуги</h2>
+
+  <div class="filters">
+    <a href="/service-requests" class="{{ 'active' if not current_status else '' }}">Все</a>
+    {% for s in statuses %}
+      <a href="/service-requests?status={{ s.value }}" class="{{ 'active' if current_status == s.value else '' }}">
+        {{ status_labels[s] }}
+      </a>
+    {% endfor %}
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>№</th>
+        <th>Статус</th>
+        <th>Услуга</th>
+        <th>Клиент</th>
+        <th>Цена</th>
+        <th>Создана</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in requests %}
+      <tr onclick="location.href='/service-requests/{{ r.id }}'">
+        <td class="mono">#{{ r.id }}</td>
+        <td class="status-label">{{ status_labels[r.status] }}</td>
+        <td>{{ r.product.title_ru }}</td>
+        <td>{{ r.owner_label }}</td>
+        <td>{% if r.final_price %}{{ r.final_price }} {{ r.currency }}{% else %}—{% endif %}</td>
+        <td class="status-label">{{ r.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="status-label">Заявок пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

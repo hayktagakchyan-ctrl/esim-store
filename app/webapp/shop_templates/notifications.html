@@ -16,6 +16,7 @@
     <div class="card">
       <strong>{{ n.title }}</strong>
       <p class="hint" style="margin:4px 0 0;">{{ n.body }}</p>
+      {% if n.link_url %}<a class="btn" href="{{ n.link_url }}" style="margin-top:12px; display:inline-flex;">{{ t("notif_open_btn") }}</a>{% endif %}
     </div>
     {% else %}
     <p class="hint" style="text-align:center;">{{ t("notif_empty") }}</p>

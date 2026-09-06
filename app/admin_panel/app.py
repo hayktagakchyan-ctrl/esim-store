@@ -9,19 +9,24 @@ from pathlib import Path
 from datetime import datetime
 import json
 
-from fastapi import FastAPI, Request, Form, Depends, HTTPException
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import select, String
+from sqlalchemy import select, String, func
 
 from app.config import settings
 from app.database.db import get_session, init_db
-from app.database.models import Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode
+from app.database.models import (
+    Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode,
+    ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
+    Notification, NotificationType,
+)
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
-from app.webapp.payments import _fulfill_order
+from app.webapp.payments import _fulfill_order, notify
+from app.webapp.uploads import save_service_file
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -707,6 +712,62 @@ async def product_delete(product_id: int, _=Depends(require_login)):
     return RedirectResponse(url="/products", status_code=302)
 
 
+# --- Вопросы формы заказа (ProductQuestion) — см. комментарий в database/models.py ---
+
+QUESTION_TYPE_LABELS = {
+    QuestionType.YES_NO: "Да / нет",
+    QuestionType.TEXT: "Текст",
+    QuestionType.FILE: "Файл",
+}
+
+
+@app.get("/products/{product_id}/questions", response_class=HTMLResponse)
+async def product_questions_list(request: Request, product_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        questions = list((await session.execute(
+            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
+            .order_by(ProductQuestion.position, ProductQuestion.id)
+        )).scalars())
+
+    return templates.TemplateResponse(
+        "product_questions.html",
+        {"request": request, "product": product, "questions": questions, "type_labels": QUESTION_TYPE_LABELS},
+    )
+
+
+@app.post("/products/{product_id}/questions/new")
+async def product_question_create(
+    product_id: int,
+    question_text: str = Form(...),
+    question_type: str = Form(...),
+    is_required: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        count = (await session.execute(
+            select(func.count()).select_from(ProductQuestion).where(ProductQuestion.product_id == product_id)
+        )).scalar_one()
+        session.add(ProductQuestion(
+            product_id=product_id, question_text=question_text.strip(),
+            question_type=QuestionType(question_type), is_required=is_required, position=count,
+        ))
+        await session.commit()
+    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
+
+
+@app.post("/products/{product_id}/questions/{question_id}/delete")
+async def product_question_delete(product_id: int, question_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        q = await session.get(ProductQuestion, question_id)
+        if q is not None:
+            await session.delete(q)
+            await session.commit()
+    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
+
+
 # --- Промокоды ---
 
 @app.get("/promo-codes", response_class=HTMLResponse)
@@ -913,3 +974,115 @@ async def bulk_import_submit(
             await session.commit()
 
     return RedirectResponse(url=f"/packages?imported={created}&updated={updated}", status_code=302)
+
+# ---------------------------------------------------------------------------
+# Заявки на услуги (ServiceRequest) — форма вместо чата, см. models.py и
+# app/webapp/shop.py (сайт). Тут админ смотрит ответы, прикладывает файл
+# (ваучер/билет), подтверждает цену и переводит в "Готово" — клиенту
+# приходит уведомление со ссылкой на оплату с баланса.
+# ---------------------------------------------------------------------------
+
+SERVICE_STATUS_LABELS = {
+    ServiceRequestStatus.SUBMITTED: "На рассмотрении",
+    ServiceRequestStatus.READY: "Готово к оплате",
+    ServiceRequestStatus.PAID: "Оплачено",
+    ServiceRequestStatus.CANCELLED: "Отклонено",
+}
+
+
+@app.get("/service-requests", response_class=HTMLResponse)
+async def service_requests_list(request: Request, status: str | None = None, _=Depends(require_login)):
+    async with get_session() as session:
+        query = select(ServiceRequest).order_by(ServiceRequest.created_at.desc())
+        if status:
+            query = query.where(ServiceRequest.status == ServiceRequestStatus(status))
+        rows = list((await session.execute(query)).scalars())
+        for r in rows:
+            await session.refresh(r, attribute_names=["product"])
+            if r.website_account_id:
+                r.owner_label = (await session.get(WebsiteAccount, r.website_account_id)).email
+            elif r.user_id:
+                bot_user = await session.get(User, r.user_id)
+                r.owner_label = bot_user.full_name or bot_user.username or str(bot_user.telegram_id)
+            else:
+                r.owner_label = "—"
+
+    return templates.TemplateResponse(
+        "service_requests_list.html",
+        {
+            "request": request, "requests": rows, "statuses": list(ServiceRequestStatus),
+            "status_labels": SERVICE_STATUS_LABELS, "current_status": status,
+        },
+    )
+
+
+@app.get("/service-requests/{request_id}", response_class=HTMLResponse)
+async def service_request_detail(request: Request, request_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["answers", "product"])
+        owner_label = "—"
+        if sr.website_account_id:
+            account = await session.get(WebsiteAccount, sr.website_account_id)
+            owner_label = account.email if account else "—"
+        elif sr.user_id:
+            bot_user = await session.get(User, sr.user_id)
+            owner_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+
+    return templates.TemplateResponse(
+        "service_request_detail.html",
+        {
+            "request": request, "sr": sr, "owner_label": owner_label,
+            "status_labels": SERVICE_STATUS_LABELS,
+        },
+    )
+
+
+@app.post("/service-requests/{request_id}/ready")
+async def service_request_mark_ready(
+    request_id: int,
+    final_price: float = Form(...),
+    admin_note: str = Form(""),
+    deliverable: UploadFile | None = File(None),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["product"])
+
+        if deliverable is not None and deliverable.filename:
+            saved = await save_service_file(deliverable, sr.id)
+            sr.deliverable_path = saved["url"]
+            sr.deliverable_filename = saved["filename"]
+
+        sr.final_price = final_price
+        sr.admin_note = admin_note.strip() or None
+        sr.status = ServiceRequestStatus.READY
+        sr.ready_at = datetime.utcnow()
+        await session.commit()
+
+        await notify(
+            session, website_account_id=sr.website_account_id, user_id=sr.user_id,
+            type=NotificationType.ORDER,
+            title="Заявка готова",
+            body=f"«{sr.product.title('ru')}» готова — можно оплатить с баланса (${final_price:.2f}).",
+            link_url=f"/shop/account/service-requests/{sr.id}",
+        )
+
+    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
+
+
+@app.post("/service-requests/{request_id}/cancel")
+async def service_request_cancel(request_id: int, admin_note: str = Form(""), _=Depends(require_login)):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        sr.status = ServiceRequestStatus.CANCELLED
+        sr.admin_note = admin_note.strip() or sr.admin_note
+        await session.commit()
+    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)

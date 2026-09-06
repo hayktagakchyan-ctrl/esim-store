@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}{{ sr.product_title }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <p><a href="/shop/account/service-requests" class="hint">← {{ t("nav_service_requests") }}</a></p>
+    <h2 class="section-title">{{ sr.product_title }}</h2>
+    <span class="status-badge {{ {'submitted': 'pending', 'ready': 'active', 'paid': 'active', 'cancelled': 'expired'}[sr.status] }}">
+      {{ t("service_status_" + sr.status) }}
+    </span>
+
+    <div class="card" style="margin-top:16px;">
+      {% for a in sr.answers %}
+      <div style="margin-bottom:14px;">
+        <div class="hint" style="margin-bottom:4px;">{{ a.question_text }}</div>
+        {% if a.question_type == "yes_no" %}
+        <div>{{ t("answer_yes") if a.answer_bool else t("answer_no") }}</div>
+        {% elif a.question_type == "text" %}
+        <div>{{ a.answer_text }}</div>
+        {% else %}
+        {% if a.answer_file_path %}<a href="{{ a.answer_file_path }}" target="_blank">📎 {{ a.answer_file_filename }}</a>{% endif %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+
+    {% if sr.admin_note %}
+    <div class="card"><div class="hint" style="margin-bottom:4px;">{{ t("service_admin_note") }}</div>{{ sr.admin_note }}</div>
+    {% endif %}
+
+    {% if sr.status == "ready" %}
+    <div class="card" style="text-align:center;">
+      <p style="font-size:20px; font-weight:700; margin-bottom:12px;">{{ sr.final_price }} {{ sr.currency }}</p>
+      {% if balance >= sr.final_price %}
+      <form method="post" action="/shop/account/service-requests/{{ sr.id }}/pay">
+        <button class="btn block" type="submit">{{ t("service_pay_balance_button") }}</button>
+      </form>
+      {% else %}
+      <p class="hint" style="margin-bottom:12px;">{{ t("service_insufficient_balance") }}</p>
+      <a class="btn block" href="/shop/account/balance">{{ t("nav_balance") }}</a>
+      {% endif %}
+    </div>
+    {% elif sr.status == "paid" and sr.deliverable_path %}
+    <div class="card" style="text-align:center;">
+      <a class="btn block" href="{{ sr.deliverable_path }}" download="{{ sr.deliverable_filename }}">{{ t("service_download_button") }}</a>
+    </div>
+    {% elif sr.status == "submitted" %}
+    <p class="hint" style="text-align:center;">{{ t("service_status_submitted_hint") }}</p>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

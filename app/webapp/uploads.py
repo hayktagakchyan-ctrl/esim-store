@@ -34,6 +34,16 @@ ALLOWED_EXTENSIONS = {
 
 async def save_attachment(file: UploadFile, conversation_id: int) -> dict:
     """Возвращает {"url", "type", "filename", "disk_path"}. Кидает HTTPException при проблеме."""
+    return await _save_to(file, UPLOADS_DIR / "conversations" / str(conversation_id), url_prefix=f"conversations/{conversation_id}")
+
+
+async def save_service_file(file: UploadFile, service_request_id: int) -> dict:
+    """То же самое, но для файлов заявок на услуги (ответ-вложение клиента ИЛИ
+    ваучер/билет, который прикладывает админ) — см. ServiceRequest/ServiceRequestAnswer."""
+    return await _save_to(file, UPLOADS_DIR / "service_requests" / str(service_request_id), url_prefix=f"service_requests/{service_request_id}")
+
+
+async def _save_to(file: UploadFile, target_dir: Path, url_prefix: str) -> dict:
     contents = await file.read()
     if len(contents) > MAX_ATTACHMENT_SIZE:
         raise HTTPException(status_code=413, detail="Файл слишком большой (максимум 20 МБ)")
@@ -49,11 +59,10 @@ async def save_attachment(file: UploadFile, conversation_id: int) -> dict:
                    "или документы (pdf/doc/docx/xls/xlsx/txt).",
         )
 
-    conv_dir = UPLOADS_DIR / "conversations" / str(conversation_id)
-    conv_dir.mkdir(parents=True, exist_ok=True)
+    target_dir.mkdir(parents=True, exist_ok=True)
 
     disk_name = f"{uuid.uuid4().hex}{suffix}"
-    disk_path = conv_dir / disk_name
+    disk_path = target_dir / disk_name
 
     with open(disk_path, "wb") as f:
         f.write(contents)
@@ -61,7 +70,7 @@ async def save_attachment(file: UploadFile, conversation_id: int) -> dict:
     attachment_type = "photo" if (file.content_type in IMAGE_CONTENT_TYPES) else "document"
 
     return {
-        "url": f"/uploads/conversations/{conversation_id}/{disk_name}",
+        "url": f"/uploads/{url_prefix}/{disk_name}",
         "type": attachment_type,
         "filename": original_name,
         "disk_path": disk_path,

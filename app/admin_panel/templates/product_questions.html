@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Вопросы формы — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products" class="active">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/products/{{ product.id }}/edit" class="status-label">← {{ product.title_ru }}</a></p>
+  <h2>Вопросы формы заказа</h2>
+  <p class="status-label" style="margin-bottom:20px;">
+    Если тут есть хотя бы один вопрос, клиент на сайте будет заполнять форму вместо чата.
+    Порядок — как добавляешь, так и покажется.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Вопрос</th>
+        <th>Тип</th>
+        <th>Обязательный</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for q in questions %}
+      <tr class="no-click">
+        <td class="mono">{{ loop.index }}</td>
+        <td>{{ q.question_text }}</td>
+        <td class="status-label">{{ type_labels[q.question_type] }}</td>
+        <td class="status-label">{{ "да" if q.is_required else "нет" }}</td>
+        <td>
+          <form method="post" action="/products/{{ product.id }}/questions/{{ q.id }}/delete" onsubmit="return confirm('Удалить вопрос?');" style="margin:0;">
+            <button class="btn danger" type="submit" style="padding:6px 12px; font-size:12px;">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="status-label">Вопросов пока нет — оформление через чат.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <div class="card" style="margin-top:24px; max-width:480px;">
+    <div class="label" style="margin-bottom:12px;">Добавить вопрос</div>
+    <form method="post" action="/products/{{ product.id }}/questions/new">
+      <div class="field">
+        <div class="label">Текст вопроса</div>
+        <input type="text" name="question_text" required placeholder="Например: Номер рейса и дата">
+      </div>
+      <div class="field">
+        <div class="label">Тип ответа</div>
+        <select name="question_type">
+          <option value="yes_no">Да / нет</option>
+          <option value="text" selected>Текст</option>
+          <option value="file">Файл</option>
+        </select>
+      </div>
+      <div class="checkbox-field">
+        <input type="checkbox" name="is_required" id="is_required" checked>
+        <label for="is_required">Обязательный вопрос</label>
+      </div>
+      <button class="btn" type="submit">Добавить</button>
+    </form>
+  </div>
+</div>
+<style>.no-click { cursor: default !important; }</style>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Заявка #{{ sr.id }} — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests" class="active">Заявки</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/service-requests" class="status-label">← Все заявки</a></p>
+  <h2>Заявка #{{ sr.id }} — {{ sr.product.title_ru }}</h2>
+  <p class="status-label" style="margin-bottom:20px;">
+    Статус: <strong>{{ status_labels[sr.status] }}</strong> · Клиент: {{ owner_label }}
+  </p>
+
+  <div class="card">
+    <div class="label" style="margin-bottom:12px;">Ответы клиента</div>
+    {% for a in sr.answers %}
+    <div class="field">
+      <div class="label">{{ a.question_text }}</div>
+      <div class="value">
+        {% if a.question_type.value == "yes_no" %}
+          {{ "Да" if a.answer_bool else "Нет" }}
+        {% elif a.question_type.value == "text" %}
+          {{ a.answer_text or "—" }}
+        {% else %}
+          {% if a.answer_file_path %}<a href="{{ a.answer_file_path }}" target="_blank">📎 {{ a.answer_file_filename }}</a>{% else %}—{% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% else %}
+    <p class="status-label">Нет ответов.</p>
+    {% endfor %}
+  </div>
+
+  {% if sr.status.value == "submitted" %}
+  <div class="card" style="max-width:480px;">
+    <div class="label" style="margin-bottom:12px;">Отметить готовым</div>
+    <form method="post" action="/service-requests/{{ sr.id }}/ready" enctype="multipart/form-data">
+      <div class="field">
+        <div class="label">Финальная цена, {{ sr.currency }}</div>
+        <input type="number" step="0.01" name="final_price" value="{{ sr.product.price if sr.product.price is not none else '' }}" required>
+      </div>
+      <div class="field">
+        <div class="label">Файл клиенту (ваучер / билет и т.п.) — необязательно сейчас, можно прикрепить позже</div>
+        <input type="file" name="deliverable">
+      </div>
+      <div class="field">
+        <div class="label">Комментарий клиенту (необязательно)</div>
+        <textarea name="admin_note" rows="2"></textarea>
+      </div>
+      <button class="btn" type="submit">Отметить готовым и уведомить клиента</button>
+    </form>
+  </div>
+
+  <div class="card" style="max-width:480px;">
+    <form method="post" action="/service-requests/{{ sr.id }}/cancel" onsubmit="return confirm('Отклонить заявку?');">
+      <button class="btn danger" type="submit">Отклонить заявку</button>
+    </form>
+  </div>
+
+  {% elif sr.status.value == "ready" %}
+  <div class="card">
+    <div class="field"><div class="label">Цена</div><div class="value">{{ sr.final_price }} {{ sr.currency }}</div></div>
+    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
+    {% if sr.admin_note %}<div class="field"><div class="label">Комментарий</div><div class="value">{{ sr.admin_note }}</div></div>{% endif %}
+    <p class="status-label">Ждём оплаты с баланса клиентом.</p>
+  </div>
+
+  {% elif sr.status.value == "paid" %}
+  <div class="card">
+    <div class="field"><div class="label">Оплачено</div><div class="value">{{ sr.final_price }} {{ sr.currency }} · {{ sr.paid_at.strftime("%d.%m.%Y %H:%M") if sr.paid_at else "—" }}</div></div>
+    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
+  </div>
+
+  {% elif sr.status.value == "cancelled" %}
+  <div class="card">
+    <p class="status-label">Заявка отклонена.{% if sr.admin_note %} Комментарий: {{ sr.admin_note }}{% endif %}</p>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

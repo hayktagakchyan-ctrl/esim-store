@@ -100,12 +100,12 @@ async def _fulfill_order(session, order: Order) -> None:
     await session.commit()
 
 
-async def notify(session, *, website_account_id=None, user_id=None, type: NotificationType, title: str, body: str) -> None:
+async def notify(session, *, website_account_id=None, user_id=None, type: NotificationType, title: str, body: str, link_url: str | None = None) -> None:
     """Кладёт запись в ленту уведомлений внутри приложения (не путать с сообщением
     от бота в Telegram — это отдельная, более "тихая" история событий)."""
     session.add(Notification(
         website_account_id=website_account_id, user_id=user_id,
-        type=type, title=title, body=body,
+        type=type, title=title, body=body, link_url=link_url,
     ))
     await session.commit()
 

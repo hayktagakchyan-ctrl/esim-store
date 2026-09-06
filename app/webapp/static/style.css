@@ -20,56 +20,59 @@
    ============================================================ */
 
 :root {
-  --bg: #F6F7F9;
+  --bg: #F4F5FA;
   --surface: #FFFFFF;
-  --surface-secondary: #EEF0F3;
-  --border: #E3E5EA;
-  --text: #12141C;
-  --text-secondary: #565F6D;
-  --text-tertiary: #8B93A0;
-  --accent: #2DB87B;
-  --accent-ink: #178556;
-  --accent-gradient: linear-gradient(135deg, #178556 0%, #2DB87B 100%);
+  --surface-secondary: #ECEEF7;
+  --border: #E1E3F0;
+  --text: #14162B;
+  --text-secondary: #6B6E85;
+  --text-tertiary: #A6A9C0;
+  --accent: #1F7D53;
+  --accent-gradient: linear-gradient(135deg, #255F38 0%, #1F7D53 100%);
   --danger: #FF3B30;
-  --success: #178556;
-  --radius-lg: 24px;
+  --success: #34C759;
+  --radius-lg: 26px;
   --radius-md: 18px;
-  --radius-sm: 14px;
-  --shadow-card: 0 1px 2px rgba(18,20,28,0.05), 0 10px 28px rgba(18,20,28,0.07);
-  --shadow-float: 0 10px 34px rgba(18,20,28,0.12), 0 2px 8px rgba(18,20,28,0.05);
-  --glow-1: rgba(45,184,123, 0.09);
-  --glow-2: rgba(23,133,86, 0.09);
-  --glass-bg: rgba(246, 247, 249, 0.80);
-  --glass-border: rgba(18, 20, 28, 0.06);
-  --font-display: 'Unbounded', 'Noto Sans Armenian', sans-serif;
-  --font-body: 'Geist', 'Noto Sans Armenian', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --radius-sm: 12px;
+  --shadow-card: 0 1px 2px rgba(20,22,50,0.05), 0 10px 28px rgba(20,22,50,0.07);
+  --shadow-float: 0 10px 34px rgba(20,22,50,0.14), 0 2px 8px rgba(20,22,50,0.06);
+  --glow-1: rgba(31, 125, 83, 0.09);
+  --glow-2: rgba(37, 95, 56, 0.09);
+  --glass-bg: rgba(244, 245, 250, 0.80);
+  --glass-border: rgba(20, 22, 50, 0.06);
 }
 
-/* Тёмная тема — как на сайте: почти чёрный #08090D + альт-поверхности #12141C,
+/* Тёмная тема — глубокий navy (не чистый чёрный, ближе к "deep space" из брифа),
    переключается через data-theme на <html>, см. applyTheme() в app.js. */
 [data-theme="dark"] {
   --bg: #08090D;
-  --surface: #12141C;
-  --surface-secondary: #1A1D26;
-  --border: rgba(255,255,255,0.08);
-  --text: #FFFFFF;
+  --surface: rgba(26, 29, 38, 0.7);
+  --surface-secondary: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.08);
+  --text: #F5F6FA;
   --text-secondary: #8E9AA8;
-  --text-tertiary: #566270;
+  --text-tertiary: #626D7A;
   --accent: #2DB87B;
-  --accent-ink: #2DB87B;
-  --accent-gradient: linear-gradient(135deg, #178556 0%, #2DB87B 100%);
-  --danger: #FF453A;
+  --accent-gradient: linear-gradient(135deg, #24985F 0%, #2DB87B 100%);
+  --danger: #EF4444;
   --success: #2DB87B;
   --shadow-card: 0 1px 2px rgba(0,0,0,0.35), 0 10px 28px rgba(0,0,0,0.4);
   --shadow-float: 0 10px 34px rgba(0,0,0,0.5), 0 2px 8px rgba(0,0,0,0.3);
-  --glow-1: rgba(45,184,123, 0.16);
-  --glow-2: rgba(23,133,86, 0.12);
-  --glass-bg: rgba(18, 20, 28, 0.72);
+  --glow-1: rgba(45, 184, 123, 0.14);
+  --glow-2: rgba(36, 152, 95, 0.10);
+  --glass-bg: rgba(18, 20, 28, 0.8);
   --glass-border: rgba(255, 255, 255, 0.08);
+}
+[data-theme="dark"] .card,
+[data-theme="dark"] .row,
+[data-theme="dark"] .quick-action-icon-wrap,
+[data-theme="dark"] .search {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 [data-theme="dark"] .category-emoji,
 [data-theme="dark"] .feature-card .icon {
-  background: linear-gradient(180deg, #16231C 0%, #0E1712 100%);
+  background: linear-gradient(180deg, #27391C 0%, #18230F 100%);
 }
 
 body { transition: background-color 0.2s ease, color 0.2s ease; }
@@ -91,14 +94,10 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-body);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
   -webkit-font-smoothing: antialiased;
   position: relative;
   overflow-x: hidden;
-}
-h1, h2, h3, .section-title, .plan-price, .esim-card .title, .tab-label,
-.onboarding-emoji + h2, .category-card .name {
-  font-family: var(--font-display);
 }
 
 /* Мягкое размытое свечение на фоне — то же решение, что и на сайте, для
@@ -166,51 +165,41 @@ body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
   padding: 5px 9px;
   border-radius: 999px;
 }
-.lang-btn.active { color: #08090D; background: var(--accent-gradient); }
+.lang-btn.active { color: #fff; background: var(--accent-gradient); }
 
 .theme-toggle {
-  position: relative;
-  width: 44px;
-  height: 24px;
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px;
+  background: var(--surface); border: 1px solid var(--border);
   border-radius: 999px;
-  border: none;
-  background: var(--surface-secondary);
   cursor: pointer;
   flex-shrink: 0;
-  padding: 0;
   margin-left: 6px;
 }
-.theme-toggle::before, .theme-toggle::after {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 9px;
-  line-height: 1;
+.theme-icon {
+  width: 20px; height: 20px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-secondary);
 }
-.theme-toggle::before { content: "☀️"; left: 5px; }
-.theme-toggle::after { content: "🌙"; right: 5px; }
-.theme-toggle .knob {
-  position: absolute;
-  top: 2px; left: 2px;
-  width: 20px; height: 20px;
-  border-radius: 50%;
-  background: var(--accent-gradient);
-  transition: transform 0.2s ease;
+.theme-icon .icon-mask { width: 14px; height: 14px; }
+[data-theme="light"] .theme-icon-sun,
+[data-theme="dark"] .theme-icon-moon {
+  background: var(--accent); color: #08090D;
 }
-[data-theme="dark"] .theme-toggle .knob { transform: translateX(20px); }
 
 .icon-btn {
-  border: none;
-  background: none;
-  font-size: 19px;
-  color: var(--accent);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+.icon-btn .icon-mask { width: 20px; height: 20px; }
 
 /* --- Экраны: отступ снизу, чтобы контент не прятался под плавающим таб-баром --- */
 .screen {
@@ -240,29 +229,80 @@ main.screen[hidden] { display: none !important; }
 }
 .search::placeholder { color: var(--text-tertiary); }
 
-/* --- Карточки категорий на главном экране --- */
+/* --- Иконки: монохромные SVG (Lucide), красятся через color + mask-image,
+   а не через <img> (тот не даёт покрасить содержимое через CSS). --- */
+.icon-mask {
+  display: inline-block;
+  width: 18px; height: 18px;
+  background-color: currentColor;
+  -webkit-mask-image: var(--icon-url);
+  mask-image: var(--icon-url);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+.icon-home { --icon-url: url('/icons/home.svg'); }
+.icon-search { --icon-url: url('/icons/search.svg'); }
+.icon-cpu { --icon-url: url('/icons/cpu.svg'); }
+.icon-user { --icon-url: url('/icons/user.svg'); }
+.icon-bell { --icon-url: url('/icons/bell.svg'); }
+.icon-sun { --icon-url: url('/icons/sun.svg'); }
+.icon-moon { --icon-url: url('/icons/moon.svg'); }
+.icon-shopping-cart { --icon-url: url('/icons/shopping-cart.svg'); }
+.icon-heart { --icon-url: url('/icons/heart.svg'); }
+.icon-credit-card { --icon-url: url('/icons/credit-card.svg'); }
+.icon-globe { --icon-url: url('/icons/globe.svg'); }
+.icon-zap { --icon-url: url('/icons/zap.svg'); }
+.icon-shield { --icon-url: url('/icons/shield.svg'); }
+.icon-chevron-left { --icon-url: url('/icons/chevron-left.svg'); }
+.icon-chevron-right { --icon-url: url('/icons/chevron-right.svg'); }
+.icon-check { --icon-url: url('/icons/check.svg'); }
+.icon-message-square { --icon-url: url('/icons/message-square.svg'); }
+.icon-star { --icon-url: url('/icons/star.svg'); }
+
+/* --- Вводный блок на главной: "Твой цифровой роуминг" + поиск --- */
+.hero-search { margin-bottom: 20px; }
+.search-intro { margin-bottom: 16px; }
+.search-kicker {
+  font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase;
+  color: var(--accent); margin: 0 0 6px;
+}
+.search-title { font-size: 24px; font-weight: 700; letter-spacing: -0.24px; margin: 0; color: var(--text); }
+.search-bar-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px; background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  color: var(--text-secondary); font-size: 14px; cursor: pointer; text-align: left;
+}
+.search-bar-btn .icon-mask { width: 20px; height: 20px; flex-shrink: 0; }
+
+/* --- Карточки категорий на главном экране (промо-баннер eSIM) --- */
 .category-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 16px 18px;
+  gap: 16px;
+  padding: 16px;
   background: var(--surface);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  border-radius: 20px;
   margin-bottom: 12px;
   box-shadow: var(--shadow-card);
   cursor: pointer;
 }
 .category-card:active { transform: scale(0.98); }
 .category-emoji {
-  font-size: 26px;
   width: 48px; height: 48px;
   display: flex; align-items: center; justify-content: center;
-  background: linear-gradient(180deg, #E3F5EC 0%, #D6F0E3 100%);
-  border-radius: 14px;
+  background: rgba(45, 184, 123, 0.12);
+  color: var(--accent);
+  border-radius: 24px;
   flex-shrink: 0;
 }
-.category-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
-.category-subtitle { font-size: 13px; color: var(--text-secondary); margin-top: 2px; }
+.category-emoji .icon-mask { width: 24px; height: 24px; }
+.category-title { font-size: 15px; font-weight: 600; color: var(--text); }
+.category-subtitle { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
 
 /* --- Списки (страны, чаты и т.п.) — сгруппированные iOS-style ряды --- */
 .list {
@@ -332,10 +372,10 @@ main.screen[hidden] { display: none !important; }
   border: none;
   border-radius: var(--radius-md);
   background: var(--accent-gradient);
-  color: #08090D;
+  color: #fff;
   font-size: 16px;
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(45, 184, 123, 0.32);
+  box-shadow: 0 4px 14px rgba(31, 125, 83, 0.32);
 }
 .primary-btn:active { transform: scale(0.98); box-shadow: 0 2px 8px rgba(31,125,83,0.28); }
 .primary-btn.test-btn {
@@ -412,7 +452,7 @@ main.screen[hidden] { display: none !important; }
   border-radius: 14px;
   border: none;
   background: var(--accent-gradient);
-  color: #08090D;
+  color: #fff;
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
@@ -434,7 +474,7 @@ main.screen[hidden] { display: none !important; }
   white-space: nowrap;
   cursor: pointer;
 }
-.promo-pill.active { background: var(--accent-gradient); color: #08090D; }
+.promo-pill.active { background: var(--accent-gradient); color: #fff; }
 
 /* --- Сердечко избранного на строке страны --- */
 .fav-heart-btn {
@@ -473,19 +513,29 @@ main.screen[hidden] { display: none !important; }
 /* --- Ряд быстрых действий на главной --- */
 .quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
 .quick-action-btn {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  background: none; border: none; color: var(--text); font-size: 11px; font-weight: 600;
+  display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px;
+  height: 90px; padding: 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  color: var(--text); font-size: 11px; font-weight: 600;
   cursor: pointer;
 }
+.quick-action-btn:active { transform: scale(0.97); }
 .quick-action-icon {
-  width: 48px; height: 48px; border-radius: 16px;
+  width: 36px; height: 36px; border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 20px; color: #fff;
+  flex-shrink: 0;
 }
-.qa-purple { background: linear-gradient(135deg, #E0A030, #C27F1A); }
-.qa-blue { background: linear-gradient(135deg, #565A63, #3D4048); }
-.qa-orange { background: linear-gradient(135deg, #FFA24F, #FF7A30); }
-.qa-green { background: var(--accent-gradient); }
+.quick-action-icon .icon-mask { width: 18px; height: 18px; }
+.qa-purple { background: rgba(45, 184, 123, 0.12); color: var(--accent); }
+.qa-blue { background: rgba(59, 130, 246, 0.13); color: #3B82F6; }
+.qa-orange { background: rgba(239, 68, 68, 0.13); color: #EF4444; }
+.qa-green { background: rgba(245, 158, 11, 0.13); color: #F59E0B; }
+/* В «Почему KaLine» и в профиле те же классы переиспользованы для разметки,
+   но по макету там ВСЕ иконки одного зелёного цвета, а не 4 разных — эта
+   строка более специфична (.row-icon + qa-*), поэтому и побеждает. */
+.row-icon.qa-purple, .row-icon.qa-blue, .row-icon.qa-orange, .row-icon.qa-green {
+  background: rgba(45, 184, 123, 0.12); color: var(--accent);
+}
 
 .section-heading { font-size: 17px; font-weight: 700; margin: 20px 0 10px; }
 
@@ -496,19 +546,18 @@ main.screen[hidden] { display: none !important; }
 
 /* --- Маленькая версия градиентной иконки — для строк списка (профиль, "почему мы") --- */
 .row-icon {
-  width: 34px; height: 34px;
-  border-radius: 11px;
+  width: 36px; height: 36px;
+  border-radius: 18px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 16px;
-  color: #fff;
   flex-shrink: 0;
 }
+.row-icon .icon-mask { width: 18px; height: 18px; }
 
 /* --- Экран профиля --- */
 .profile-header { display: flex; flex-direction: column; align-items: center; padding: 16px 0 20px; }
 .profile-avatar {
   width: 64px; height: 64px; border-radius: 50%;
-  background: var(--accent-gradient); color: #08090D;
+  background: var(--accent-gradient); color: #fff;
   display: flex; align-items: center; justify-content: center;
   font-size: 26px; font-weight: 700; margin-bottom: 10px;
 }
@@ -525,12 +574,13 @@ main.screen[hidden] { display: none !important; }
   width: 48px; height: 48px;
   border-radius: 50%;
   background: var(--accent-gradient);
-  color: #08090D;
+  color: #fff;
   border: none;
-  font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
   box-shadow: var(--shadow-float);
   z-index: 50;
 }
+.floating-chat-btn .icon-mask { width: 22px; height: 22px; }
 .floating-chat-btn:active { transform: scale(0.94); }
 
 /* --- Онбординг при первом входе --- */
@@ -609,7 +659,7 @@ main.screen[hidden] { display: none !important; }
   border: none;
   border-radius: 999px;
   background: var(--accent-gradient);
-  color: #08090D;
+  color: #fff;
   font-size: 13px;
   font-weight: 600;
 }
@@ -652,7 +702,7 @@ main.screen[hidden] { display: none !important; }
   border-radius: 50%;
   border: none;
   background: var(--accent-gradient);
-  color: #08090D;
+  color: #fff;
   font-size: 15px;
   flex-shrink: 0;
 }
@@ -696,4 +746,9 @@ main.screen[hidden] { display: none !important; }
   transition: color 0.15s ease;
 }
 .tab-btn.active { color: var(--accent); }
-.tab-icon { font-size: 21px; }
+.tab-icon-wrap {
+  width: 40px; height: 24px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+}
+.tab-icon-wrap .icon-mask { width: 20px; height: 20px; }
+.tab-btn.active .tab-icon-wrap { background: rgba(45, 184, 123, 0.12); }

@@ -65,44 +65,8 @@ def _country_hue(code: str) -> int:
     return 190 + sum(ord(c) for c in (code or "")) * 37 % 100  # 190..290: cyan → blue → purple
 
 
-_REGION_ICON_RULES = [
-    # Порядок важен: более специфичные варианты (напр. "центральная азия")
-    # должны проверяться раньше общих ("азия"), иначе им never достанется своя иконка.
-    ("central-asia", ("центральн.*ази", "central asia")),
-    ("central-america", ("центральн.*амери", "central america")),
-    ("middle-east", ("ближн.*восток", "middle east")),
-    ("south-america", ("южн.*амери", "south america")),
-    ("north-america", ("север.*амери", "north america")),
-    ("caribbean", ("кариб", "caribbean")),
-    ("antarctica", ("антаркт", "antarctica")),
-    ("russia-cis", ("росси", "снг", "russia", " cis", "cis ")),
-    ("europe", ("европ", "europe")),
-    ("africa", ("африк", "africa")),
-    ("oceania", ("океан", "oceania", "австрал", "australia")),
-    ("asia", ("ази", "asia")),
-]
-
-
-def _region_icon(name: str) -> str | None:
-    """
-    Название регионального пакета → путь к иконке (см. shop_static/img/regions/).
-    Иконки — реальные картинки, а не эмодзи-заглушка, поэтому подбираем по
-    ключевым словам в названии; если ни одно не подошло — вернём None, и
-    шаблон покажет обычный флаг/глобус вместо иконки.
-    """
-    import re
-
-    low = (name or "").lower()
-    for icon, patterns in _REGION_ICON_RULES:
-        for p in patterns:
-            if re.search(p, low):
-                return f"/shop-static/img/regions/{icon}.jpg"
-    return None
-
-
 templates.env.filters["flag"] = _country_flag
 templates.env.filters["hue"] = _country_hue
-templates.env.filters["region_icon"] = _region_icon
 
 
 def _safe_next(next_url: str) -> str:

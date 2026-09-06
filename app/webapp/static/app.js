@@ -142,6 +142,7 @@ document.getElementById("floating-chat-btn").addEventListener("click", () => {
   showScreen("chats");
 });
 
+document.getElementById("home-search-btn").addEventListener("click", () => { loadCountries(); showScreen("esim-countries"); });
 document.getElementById("quick-buy-esim").addEventListener("click", () => { loadCountries(); showScreen("esim-countries"); });
 document.getElementById("quick-my-esims").addEventListener("click", () => { loadMyEsims(); showScreen("my-esims"); });
 document.getElementById("quick-favorites").addEventListener("click", () => {

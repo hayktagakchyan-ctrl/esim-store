@@ -12,6 +12,9 @@ const I18N = {
   back: { ru: "Назад", hy: "Հետ", en: "Back" },
 
   search_country_placeholder: { ru: "Поиск страны", hy: "Փնտրել երկիր", en: "Search country" },
+  hero_kicker: { ru: "Твой цифровой роуминг", hy: "Քո թվային ռոումինգը", en: "Your digital roaming" },
+  hero_title: { ru: "Путешествуй свободно", hy: "Ճամփորդիր ազատորեն", en: "Travel freely" },
+  home_search_placeholder: { ru: "Куда вы отправляетесь?", hy: "Ո՞ւր եք մեկնում", en: "Where are you headed?" },
   catalog_empty: { ru: "Каталог пока пуст", hy: "Կատալոգը դեռ դատարկ է", en: "Catalog is empty for now" },
   packages_empty: { ru: "Для этой страны пока нет пакетов", hy: "Այս երկրի համար փաթեթներ դեռ չկան", en: "No packages for this country yet" },
 

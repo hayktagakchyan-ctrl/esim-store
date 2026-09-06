@@ -14,11 +14,11 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
-from sqlalchemy import select, String
+from sqlalchemy import select
 
 from app.config import settings
 from app.database.db import get_session, init_db
-from app.database.models import Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode
+from app.database.models import Category, Order, OrderStatus, Package, Product, User, PromoCode
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.payments import _fulfill_order
@@ -757,73 +757,6 @@ async def promo_code_toggle(promo_id: int, _=Depends(require_login)):
             promo.is_active = not promo.is_active
             await session.commit()
     return RedirectResponse(url="/promo-codes", status_code=302)
-
-
-# ---------------------------------------------------------------------------
-# Пользователи — два независимых аккаунта (см. комментарий в database/models.py):
-# User (бот/Mini App, вход по Telegram) и WebsiteAccount (сайт, email+пароль).
-# У каждого свой баланс, поэтому и правим их раздельно, но на одной странице.
-# Это прямое редактирование поля balance — без истории изменений (TopUp здесь
-# не создаём, т.к. TopUp привязан к платёжным провайдерам, а это не платёж).
-# ---------------------------------------------------------------------------
-USERS_PAGE_LIMIT = 100
-
-
-@app.get("/users", response_class=HTMLResponse)
-async def users_list(request: Request, q: str = "", _=Depends(require_login)):
-    q = (q or "").strip()
-    async with get_session() as session:
-        bot_query = select(User).order_by(User.id.desc())
-        site_query = select(WebsiteAccount).order_by(WebsiteAccount.id.desc())
-
-        if q:
-            like = f"%{q}%"
-            bot_query = bot_query.where(
-                (User.username.ilike(like))
-                | (User.full_name.ilike(like))
-                | (User.telegram_id.cast(String).ilike(like))
-            )
-            site_query = site_query.where(WebsiteAccount.email.ilike(like))
-
-        bot_users = list((await session.execute(bot_query.limit(USERS_PAGE_LIMIT))).scalars())
-        site_accounts = list((await session.execute(site_query.limit(USERS_PAGE_LIMIT))).scalars())
-
-    return templates.TemplateResponse(
-        "users_list.html",
-        {
-            "request": request,
-            "bot_users": bot_users,
-            "site_accounts": site_accounts,
-            "q": q,
-            "page_limit": USERS_PAGE_LIMIT,
-        },
-    )
-
-
-@app.post("/users/bot/{user_id}/balance")
-async def bot_user_balance_update(
-    request: Request, user_id: int, balance: float = Form(...), _=Depends(require_login)
-):
-    async with get_session() as session:
-        user = await session.get(User, user_id)
-        if user is not None:
-            user.balance = round(balance, 2)
-            await session.commit()
-    q = request.query_params.get("q", "")
-    return RedirectResponse(url=f"/users?q={q}", status_code=302)
-
-
-@app.post("/users/site/{account_id}/balance")
-async def site_account_balance_update(
-    request: Request, account_id: int, balance: float = Form(...), _=Depends(require_login)
-):
-    async with get_session() as session:
-        account = await session.get(WebsiteAccount, account_id)
-        if account is not None:
-            account.balance = round(balance, 2)
-            await session.commit()
-    q = request.query_params.get("q", "")
-    return RedirectResponse(url=f"/users?q={q}", status_code=302)
 
 
 # --- Массовый импорт всего каталога esimaccess разом ---

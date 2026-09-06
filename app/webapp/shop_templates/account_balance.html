@@ -20,7 +20,10 @@
           <input type="text" id="amount" name="amount" placeholder="10" required>
         </div>
         <button class="btn block" type="submit" name="method" value="idram" style="margin-bottom:10px;">{{ t("checkout_pay_idram") }}</button>
-        <button class="btn secondary block" type="submit" name="method" value="oxapay">{{ t("checkout_pay_oxapay") }}</button>
+        <button class="btn secondary block" type="submit" name="method" value="oxapay" style="margin-bottom:10px;">{{ t("checkout_pay_oxapay") }}</button>
+        {% if stripe_enabled %}
+        <button class="btn secondary block" type="submit" name="method" value="stripe">{{ t("checkout_pay_stripe") }}</button>
+        {% endif %}
       </form>
     </div>
 

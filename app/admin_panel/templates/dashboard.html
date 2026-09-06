@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Дашборд — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/dashboard" class="active">Дашборд</a>
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Дашборд</h2>
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:16px; margin:20px 0;">
+    <div class="card" style="margin:0;">
+      <div class="label">Заработано всего</div>
+      <div style="font-size:28px; font-weight:700; margin-top:6px;">${{ "%.2f"|format(revenue_total) }}</div>
+      <div class="status-label" style="margin-top:4px;">eSIM: ${{ "%.2f"|format(revenue_orders) }} · услуги: ${{ "%.2f"|format(revenue_services) }}</div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="label">Заказов всего</div>
+      <div style="font-size:28px; font-weight:700; margin-top:6px;">{{ orders_total }}</div>
+      <div class="status-label" style="margin-top:4px;">активных: {{ orders_by_status[OrderStatus.ACTIVE] }} · ждут оплаты: {{ orders_by_status[OrderStatus.PENDING_PAYMENT] }}</div>
+    </div>
+    <div class="card" style="margin:0;">
+      <div class="label">Покупателей (примерно)</div>
+      <div style="font-size:28px; font-weight:700; margin-top:6px;">{{ customers_count }}</div>
+      <div class="status-label" style="margin-top:4px;">сайт + бот + гости, без дедупликации между ними</div>
+    </div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start;">
+    <div>
+      <h3>Топ пакетов по выручке</h3>
+      <table>
+        <thead><tr><th>Пакет</th><th>Страна</th><th>Продаж</th><th>Выручка</th></tr></thead>
+        <tbody>
+          {% for p in top_packages %}
+          <tr class="no-click">
+            <td>{{ p.title }}</td>
+            <td class="status-label">{{ p.country }}</td>
+            <td class="mono">{{ p.count }}</td>
+            <td class="mono">${{ "%.2f"|format(p.revenue) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="status-label">Пока нет продаж.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <h3>Топ стран по выручке</h3>
+      <table>
+        <thead><tr><th>Страна</th><th>Выручка</th></tr></thead>
+        <tbody>
+          {% for country, revenue in top_countries %}
+          <tr class="no-click">
+            <td>{{ country }}</td>
+            <td class="mono">${{ "%.2f"|format(revenue) }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="2" class="status-label">Пока нет продаж.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <h3 style="margin-top:32px;">Последние заказы eSIM</h3>
+  <table>
+    <thead><tr><th>№</th><th>Статус</th><th>Клиент</th><th>Пакет</th><th>Цена</th><th>Создан</th></tr></thead>
+    <tbody>
+      {% for o in recent_orders %}
+      <tr onclick="location.href='/orders/{{ o.id }}'">
+        <td class="mono">#{{ o.id }}</td>
+        <td class="status-label">{{ STATUS_META[o.status][0] }}</td>
+        <td>{{ o.customer_label }}</td>
+        <td>{{ o.package.title }}</td>
+        <td class="mono">{{ o.price_charged }} {{ o.currency }}</td>
+        <td class="status-label">{{ o.created_at.strftime("%d.%m.%Y %H:%M") }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="status-label">Заказов пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:32px;">Последние оплаченные услуги</h3>
+  <table>
+    <thead><tr><th>№</th><th>Клиент</th><th>Услуга</th><th>Цена</th><th>Оплачена</th></tr></thead>
+    <tbody>
+      {% for r in recent_services %}
+      <tr onclick="location.href='/service-requests/{{ r.id }}'">
+        <td class="mono">#{{ r.id }}</td>
+        <td>{{ r.customer_label }}</td>
+        <td>{{ r.product.title_ru }}</td>
+        <td class="mono">{{ r.final_price }} {{ r.currency }}</td>
+        <td class="status-label">{{ r.paid_at.strftime("%d.%m.%Y %H:%M") if r.paid_at else "—" }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="status-label">Оплаченных услуг пока нет.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<style>.no-click { cursor: default !important; }</style>
+{% endblock %}

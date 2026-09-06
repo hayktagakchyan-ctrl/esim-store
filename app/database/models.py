@@ -138,6 +138,7 @@ class PaymentProvider(str, enum.Enum):
     IDRAM = "idram"
     WALLET_PAY = "wallet_pay"   # Telegram Wallet — покрывает и "крипту", и "Telegram-кошелёк" одним провайдером
     OXAPAY = "oxapay"           # крипта с ЛЮБОГО адреса/биржи, без привязки к Telegram-аккаунту
+    STRIPE = "stripe"           # карта, международно — пока подключено только для пополнения баланса на сайте
     TEST = "test"               # только для проверки — см. settings.ENABLE_TEST_PAYMENT
     BALANCE = "balance"         # оплата с внутреннего баланса сайта (см. WebsiteAccount.balance)
 

@@ -76,6 +76,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "checkout_pay_idram": {"ru": "Оплатить картой через Idram", "hy": "Վճարել քարտով Idram-ով", "en": "Pay by card via Idram"},
     "checkout_pay_oxapay": {"ru": "Оплатить криптовалютой", "hy": "Վճարել կրիպտոարժույթով", "en": "Pay with crypto"},
+    "checkout_pay_stripe": {"ru": "Оплатить картой (Stripe)", "hy": "Վճարել քարտով (Stripe)", "en": "Pay by card (Stripe)"},
     "checkout_hint": {
         "ru": "После оплаты откроется страница заказа с QR-кодом активации — сохрани на неё ссылку.",
         "hy": "Վճարումից հետո կբացվի պատվերի էջը՝ ակտիվացման QR-կոդով։",

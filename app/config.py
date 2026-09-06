@@ -61,6 +61,15 @@ class Settings(BaseSettings):
     # документацией https://docs.oxapay.com/ (включая формулу подписи вебхука).
     OXAPAY_MERCHANT_API_KEY: str = ""  # ключ из личного кабинета oxapay.com, раздел Merchant
 
+    # --- Оплата: Stripe (карта, международно) — пока подключено только для
+    # пополнения баланса на сайте (см. app/webapp/shop.py, account_balance_topup),
+    # не для прямой оплаты заказа — тот пока принимает оплату только с баланса.
+    # STRIPE_PUBLISHABLE_KEY сейчас не используется бэкендом (Checkout — хостед-
+    # страница Stripe), но понадобится, если позже добавите Stripe Elements.
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_PUBLISHABLE_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+
     # Публичный адрес этого же процесса (app/webapp) — нужен для RESULT_URL/SUCCESS_URL/FAIL_URL
     # у Idram и для колбэков. Обычно совпадает с MINIAPP_URL без пути /miniapp.
     PUBLIC_BASE_URL: str = "https://example.com"
@@ -86,6 +95,7 @@ class Settings(BaseSettings):
     # сервере (на случай прямого обращения в обход кнопки).
     ENABLE_WALLET_PAY: bool = True
     ENABLE_OXAPAY: bool = True
+    ENABLE_STRIPE: bool = True
 
 
     # --- Безопасность ---

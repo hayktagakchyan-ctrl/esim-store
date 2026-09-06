@@ -64,6 +64,9 @@ async def _run_light_migrations(conn) -> None:
     if conn.dialect.name != "postgresql":
         return  # ALTER ... IF NOT EXISTS в этом виде — синтаксис Postgres; на SQLite (локально) не нужно
     await conn.execute(text("ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link_url VARCHAR(512)"))
+    # Новое значение enum-а (Postgres хранит PaymentProvider как настоящий ENUM-тип в БД,
+    # create_all() новые значения туда не добавляет — только ALTER TYPE, отдельно).
+    await conn.execute(text("ALTER TYPE paymentprovider ADD VALUE IF NOT EXISTS 'stripe'"))
 
 
 @asynccontextmanager

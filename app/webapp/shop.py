@@ -33,6 +33,8 @@ from app.database.models import (
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
 from app.services.payments import idram
 from app.services.payments.oxapay import oxapay_client, OxaPayError
+from app.services.payments import stripe_pay
+from app.services.payments.stripe_pay import StripePaymentError
 from app.webapp.notify_bots import support_notify_bot
 from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT, notify
 from app.webapp.shop_auth import get_current_account, hash_password, verify_password
@@ -140,6 +142,7 @@ async def render(request: Request, template_name: str, **context):
         "lang": lang,
         "t": lambda key: translate(key, lang),
         "account": account,
+        "stripe_enabled": bool(settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY),
     })
     return templates.TemplateResponse(template_name, context)
 
@@ -1146,16 +1149,18 @@ async def account_balance_topup(request: Request, amount: str = Form(...), metho
             referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
             referral_percent=REFERRAL_BONUS_PERCENT, error="Минимальная сумма пополнения — $1.",
         )
-    if method not in ("idram", "oxapay"):
+    if method not in ("idram", "oxapay", "stripe"):
         raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
     if method == "oxapay" and not settings.ENABLE_OXAPAY:
         raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+    if method == "stripe" and not (settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY):
+        raise HTTPException(status_code=403, detail="Оплата картой (Stripe) временно недоступна")
 
     external_id = str(uuid.uuid4())
     async with get_session() as session:
         top_up = TopUp(
             website_account_id=account.id, amount=amount_value, currency="USD",
-            provider=PaymentProvider.IDRAM if method == "idram" else PaymentProvider.OXAPAY,
+            provider={"idram": PaymentProvider.IDRAM, "oxapay": PaymentProvider.OXAPAY, "stripe": PaymentProvider.STRIPE}[method],
             status=PaymentStatus.PENDING, external_payment_id=external_id,
         )
 
@@ -1163,6 +1168,25 @@ async def account_balance_topup(request: Request, amount: str = Form(...), metho
             session.add(top_up)
             await session.commit()
             redirect_url = f"/pay/idram/{external_id}"
+        elif method == "stripe":
+            try:
+                checkout_url = await stripe_pay.create_checkout_session(
+                    amount=amount_value, currency="USD", description="Пополнение баланса",
+                    success_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance?paid=1",
+                    cancel_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance",
+                    client_reference_id=external_id, email=account.email,
+                )
+            except StripePaymentError as exc:
+                return await render(
+                    request, "account_balance.html", balance=account.balance, top_ups=[],
+                    referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+                    referral_percent=REFERRAL_BONUS_PERCENT,
+                    error=f"Платёжная система временно недоступна: {exc}",
+                )
+            top_up.pay_link = checkout_url
+            session.add(top_up)
+            await session.commit()
+            redirect_url = checkout_url
         else:
             try:
                 invoice = await oxapay_client.create_invoice(

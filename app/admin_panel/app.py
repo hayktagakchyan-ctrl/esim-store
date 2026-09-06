@@ -78,6 +78,7 @@ STATUS_META = {
     OrderStatus.REFUNDED: ("Возврат", 0, "red"),
 }
 templates.env.globals["STATUS_META"] = STATUS_META
+templates.env.globals["OrderStatus"] = OrderStatus
 
 
 def require_login(request: Request) -> None:
@@ -124,7 +125,94 @@ async def logout(request: Request):
 
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    return RedirectResponse(url="/orders")
+    return RedirectResponse(url="/dashboard")
+
+
+PAID_ORDER_STATUSES = (OrderStatus.PAID, OrderStatus.PROVISIONING, OrderStatus.ACTIVE)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        orders = list((await session.execute(select(Order))).scalars())
+        paid_orders = [o for o in orders if o.status in PAID_ORDER_STATUSES]
+
+        revenue_orders = sum(float(o.price_charged) for o in paid_orders)
+
+        service_requests = list((await session.execute(select(ServiceRequest))).scalars())
+        paid_services = [r for r in service_requests if r.status == ServiceRequestStatus.PAID]
+        revenue_services = sum(float(r.final_price) for r in paid_services if r.final_price is not None)
+
+        orders_by_status = {s: 0 for s in OrderStatus}
+        for o in orders:
+            orders_by_status[o.status] += 1
+
+        # Уникальных покупателей — приблизительно: аккаунт сайта, пользователь бота
+        # и email гостя (без аккаунта) в заказах считаются как три разных категории,
+        # поэтому если один и тот же человек покупал и как гость, и залогинившись —
+        # он попадёт в счётчик дважды. Для точного числа нужна была бы отдельная
+        # таблица "клиент", которой пока в схеме нет.
+        site_customers = {o.website_account_id for o in orders if o.website_account_id}
+        bot_customers = {o.user_id for o in orders if o.user_id and not o.website_account_id}
+        guest_emails = {o.email for o in orders if o.email and not o.website_account_id and not o.user_id}
+        customers_count = len(site_customers) + len(bot_customers) + len(guest_emails)
+
+        # Топ пакетов и стран по выручке — на оплаченных заказах.
+        for o in paid_orders:
+            await session.refresh(o, attribute_names=["package"])
+        package_revenue: dict[int, dict] = {}
+        country_revenue: dict[str, float] = {}
+        for o in paid_orders:
+            pkg = o.package
+            entry = package_revenue.setdefault(pkg.id, {"title": pkg.title, "country": pkg.country_name, "revenue": 0.0, "count": 0})
+            entry["revenue"] += float(o.price_charged)
+            entry["count"] += 1
+            country_revenue[pkg.country_name] = country_revenue.get(pkg.country_name, 0.0) + float(o.price_charged)
+
+        top_packages = sorted(package_revenue.values(), key=lambda e: e["revenue"], reverse=True)[:8]
+        top_countries = sorted(country_revenue.items(), key=lambda kv: kv[1], reverse=True)[:8]
+
+        # Последние покупки — заказы eSIM и оплаченные заявки на услуги вместе, по дате.
+        recent_orders = sorted(orders, key=lambda o: o.created_at, reverse=True)[:15]
+        for o in recent_orders:
+            await session.refresh(o, attribute_names=["package"])
+            if o.website_account_id:
+                account = await session.get(WebsiteAccount, o.website_account_id)
+                o.customer_label = account.email if account else "—"
+            elif o.user_id:
+                bot_user = await session.get(User, o.user_id)
+                o.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+            else:
+                o.customer_label = o.email or "гость"
+
+        recent_services = sorted(paid_services, key=lambda r: r.paid_at or r.created_at, reverse=True)[:10]
+        for r in recent_services:
+            await session.refresh(r, attribute_names=["product"])
+            if r.website_account_id:
+                account = await session.get(WebsiteAccount, r.website_account_id)
+                r.customer_label = account.email if account else "—"
+            elif r.user_id:
+                bot_user = await session.get(User, r.user_id)
+                r.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+            else:
+                r.customer_label = "—"
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "revenue_orders": revenue_orders,
+            "revenue_services": revenue_services,
+            "revenue_total": revenue_orders + revenue_services,
+            "orders_total": len(orders),
+            "orders_by_status": orders_by_status,
+            "customers_count": customers_count,
+            "top_packages": top_packages,
+            "top_countries": top_countries,
+            "recent_orders": recent_orders,
+            "recent_services": recent_services,
+        },
+    )
 
 
 @app.get("/orders", response_class=HTMLResponse)

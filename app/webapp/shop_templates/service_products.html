@@ -12,15 +12,7 @@
       {% if p.description %}<div class="hint" style="margin-top:4px;">{{ p.description }}</div>{% endif %}
       <div style="display:flex; align-items:center; justify-content:space-between; margin-top:14px;">
         <span>{% if p.price is not none %}<strong>{{ p.price }} {{ p.currency }}</strong>{% endif %}</span>
-        {% if p.has_form %}
         <a class="btn" href="/shop/services/product/{{ p.id }}/request" style="padding:10px 20px; font-size:14px;">{{ t("product_order_button") }}</a>
-        {% else %}
-        <form method="post" action="/shop/chat/start" style="margin:0;">
-          <input type="hidden" name="category_id" value="{{ category_id }}">
-          <input type="hidden" name="product_id" value="{{ p.id }}">
-          <button class="btn" type="submit" style="padding:10px 20px; font-size:14px;">{{ t("product_ask_button") }}</button>
-        </form>
-        {% endif %}
       </div>
     </div>
     {% else %}

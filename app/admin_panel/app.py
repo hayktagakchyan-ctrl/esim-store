@@ -415,14 +415,24 @@ async def create_test_order(package_id: int = Form(...), _=Depends(require_login
 
 
 @app.get("/packages", response_class=HTMLResponse)
-async def packages_list(request: Request, imported: int | None = None, updated: int | None = None, _=Depends(require_login)):
+async def packages_list(
+    request: Request, imported: int | None = None, updated: int | None = None, q: str = "", _=Depends(require_login)
+):
     async with get_session() as session:
-        result = await session.execute(select(Package).order_by(Package.country_name, Package.title))
+        query = select(Package).order_by(Package.country_name, Package.title)
+        q = (q or "").strip()
+        if q:
+            like = f"%{q}%"
+            query = query.where(
+                Package.title.ilike(like) | Package.country_name.ilike(like)
+                | Package.country_code.ilike(like) | Package.esimaccess_package_code.ilike(like)
+            )
+        result = await session.execute(query)
         packages = list(result.scalars())
 
     return templates.TemplateResponse(
         "packages_list.html",
-        {"request": request, "packages": packages, "imported": imported, "updated": updated},
+        {"request": request, "packages": packages, "imported": imported, "updated": updated, "q": q},
     )
 
 
@@ -780,6 +790,7 @@ async def product_create(
     description_en: str = Form(""),
     price: str = Form(""),
     currency: str = Form("USD"),
+    response_time_text: str = Form(""),
     is_active: bool = Form(False),
     _=Depends(require_login),
 ):
@@ -794,6 +805,7 @@ async def product_create(
             description_en=description_en.strip() or None,
             price=float(price) if price.strip() else None,
             currency=currency.strip().upper(),
+            response_time_text=response_time_text.strip() or None,
             is_active=is_active,
         )
         session.add(product)
@@ -830,6 +842,7 @@ async def product_update(
     description_en: str = Form(""),
     price: str = Form(""),
     currency: str = Form("USD"),
+    response_time_text: str = Form(""),
     is_active: bool = Form(False),
     _=Depends(require_login),
 ):
@@ -847,6 +860,7 @@ async def product_update(
         product.description_en = description_en.strip() or None
         product.price = float(price) if price.strip() else None
         product.currency = currency.strip().upper()
+        product.response_time_text = response_time_text.strip() or None
         product.is_active = is_active
         await session.commit()
 

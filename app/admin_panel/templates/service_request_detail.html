@@ -27,6 +27,12 @@
 
   <div class="card">
     <div class="label" style="margin-bottom:12px;">Ответы клиента</div>
+    {% if sr.client_note %}
+    <div class="field">
+      <div class="label">Комментарий клиента</div>
+      <div class="value">{{ sr.client_note }}</div>
+    </div>
+    {% endif %}
     {% for a in sr.answers %}
     <div class="field">
       <div class="label">{{ a.question_text_ru }}</div>

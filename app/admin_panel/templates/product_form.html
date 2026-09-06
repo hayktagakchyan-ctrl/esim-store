@@ -70,6 +70,13 @@
         </div>
       </div>
 
+      <div class="field">
+        <div class="label">Срок ответа (виден клиенту, пока заявка на рассмотрении)</div>
+        <input type="text" name="response_time_text"
+               value="{{ product.response_time_text if product and product.response_time_text else '' }}"
+               placeholder="напр. 1-3 рабочих дня">
+      </div>
+
       <div class="checkbox-field">
         <input type="checkbox" name="is_active" id="is_active" {{ "checked" if not product or product.is_active else "" }}>
         <label for="is_active">Показывать в Mini App клиентам</label>

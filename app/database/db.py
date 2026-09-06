@@ -103,6 +103,11 @@ async def _run_light_migrations(conn) -> None:
         for col in ("question_text_ru", "question_text_hy", "question_text_en"):
             await conn.execute(text(f"UPDATE service_request_answers SET {col} = question_text WHERE {col} IS NULL"))
 
+    # Срок ответа по услуге (Product) и комментарий клиента (ServiceRequest) —
+    # добавлены позже, тоже просто новые nullable-колонки в уже существующих таблицах.
+    await conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS response_time_text VARCHAR(255)"))
+    await conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS client_note TEXT"))
+
 
 @asynccontextmanager
 async def get_session():

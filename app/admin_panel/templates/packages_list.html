@@ -43,6 +43,12 @@
     можно проверить, что интеграция реально работает, не разбираясь пока с оплатой.
   </p>
 
+  <form method="get" action="/packages" style="margin-bottom:16px; max-width:420px;">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск: страна, название, код esimaccess"
+           style="width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
+  </form>
+  {% if q %}<p class="status-label" style="margin-bottom:12px;">Найдено: {{ packages|length }}</p>{% endif %}
+
   <table>
     <thead>
       <tr>

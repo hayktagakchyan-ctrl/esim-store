@@ -125,8 +125,7 @@
     <div class="country-grid" id="regions-grid">
       {% for r in regions %}
       <a class="country-tile region-tile {{ 'region-extra' if loop.index0 >= 6 else '' }}" href="/shop/country/{{ r.code }}">
-        {% set icon = r.name|region_icon %}
-        {% if icon %}<img class="flag region-icon-img" src="{{ icon }}" alt="">{% else %}<span class="flag">🌐</span>{% endif %}
+        <span class="flag">{{ r.name|region_icon }}</span>
         <div>
           <div class="name">{{ r.name }}</div>
           <div class="meta">{{ t("region_from") }} ${{ "%.2f"|format(r.from_price) }}</div>

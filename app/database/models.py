@@ -245,6 +245,11 @@ class Product(Base):
     price: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     currency: Mapped[str] = mapped_column(String(8), default="USD")
 
+    # Сколько ждать ответа после заявки (см. форму заказа вместо чата,
+    # ServiceRequest) — свободный текст, админ пишет как хочет, напр.
+    # "1-3 рабочих дня". Показывается клиенту, пока заявка на рассмотрении.
+    response_time_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -389,6 +394,9 @@ class ServiceRequest(Base):
     deliverable_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # виден клиенту, необязателен
+    # Свободный комментарий от самого клиента — поле всегда есть в форме, даже
+    # если у товара нет ни одного настроенного вопроса (чтобы форма не была пустой).
+    client_note: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     ready_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -72,27 +72,26 @@ def _country_hue(code: str) -> int:
 _REGION_ICON_RULES = [
     # Порядок важен: более специфичные варианты (напр. "центральная азия")
     # должны проверяться раньше общих ("азия"), иначе им never достанется своя иконка.
-    ("central-asia", ("центральн.*ази", "central asia")),
-    ("central-america", ("центральн.*амери", "central america")),
-    ("middle-east", ("ближн.*восток", "middle east")),
-    ("south-america", ("южн.*амери", "south america")),
-    ("north-america", ("север.*амери", "north america")),
-    ("caribbean", ("кариб", "caribbean")),
-    ("antarctica", ("антаркт", "antarctica")),
-    ("russia-cis", ("росси", "снг", "russia", " cis", "cis ")),
-    ("europe", ("европ", "europe")),
-    ("africa", ("африк", "africa")),
-    ("oceania", ("океан", "oceania", "австрал", "australia")),
-    ("asia", ("ази", "asia")),
+    ("🏔️", ("центральн.*ази", "central asia")),
+    ("🌋", ("центральн.*амери", "central america")),
+    ("🕌", ("ближн.*восток", "middle east")),
+    ("🦜", ("южн.*амери", "south america")),
+    ("🗽", ("север.*амери", "north america")),
+    ("🏝️", ("кариб", "caribbean")),
+    ("🐧", ("антаркт", "antarctica")),
+    ("🐻", ("росси", "снг", "russia", " cis", "cis ")),
+    ("🗼", ("европ", "europe")),
+    ("🦁", ("африк", "africa")),
+    ("🦘", ("океан", "oceania", "австрал", "australia")),
+    ("🐼", ("ази", "asia")),
 ]
 
 
-def _region_icon(name: str) -> str | None:
+def _region_icon(name: str) -> str:
     """
-    Название регионального пакета → путь к иконке (см. shop_static/img/regions/).
-    Иконки — реальные картинки, а не эмодзи-заглушка, поэтому подбираем по
-    ключевым словам в названии; если ни одно не подошло — вернём None, и
-    шаблон покажет обычный флаг/глобус вместо иконки.
+    Название регионального пакета → эмодзи-иконка (не картинка/фото — просто
+    подходящий по смыслу эмодзи, как и с флагами стран). Подбираем по ключевым
+    словам в названии; если ни одно не подошло — обычный глобус.
     """
     import re
 
@@ -100,8 +99,8 @@ def _region_icon(name: str) -> str | None:
     for icon, patterns in _REGION_ICON_RULES:
         for p in patterns:
             if re.search(p, low):
-                return f"/shop-static/img/regions/{icon}.jpg"
-    return None
+                return icon
+    return "🌐"
 
 
 templates.env.filters["flag"] = _country_flag
@@ -571,14 +570,14 @@ async def service_request_form(request: Request, product_id: int):
             select(ProductQuestion).where(ProductQuestion.product_id == product_id)
             .order_by(ProductQuestion.position, ProductQuestion.id)
         )).scalars())
-        if not questions:
-            # У этого товара анкета не настроена — оформление только через чат.
-            raise HTTPException(status_code=404, detail="Для этой услуги оформление через чат")
+        # Пустой список вопросов — нормально: значит, у товара просто нет анкеты,
+        # форма отправится с одними базовыми полями (ничего через чат больше не оформляем).
 
     return await render(
         request, "service_request_form.html",
         product={"id": product.id, "title": product.title(lang),
-                 "price": float(product.price) if product.price is not None else None, "currency": product.currency},
+                 "price": float(product.price) if product.price is not None else None, "currency": product.currency,
+                 "response_time_text": product.response_time_text},
         questions=[{"id": q.id, "question_text": q.text(lang), "question_type": q.question_type, "is_required": q.is_required} for q in questions],
     )
 
@@ -601,7 +600,10 @@ async def service_request_submit(request: Request, product_id: int):
             .order_by(ProductQuestion.position, ProductQuestion.id)
         )).scalars())
 
-        sr = ServiceRequest(product_id=product_id, website_account_id=account.id, currency=product.currency)
+        sr = ServiceRequest(
+            product_id=product_id, website_account_id=account.id, currency=product.currency,
+            client_note=(form.get("client_note") or "").strip() or None,
+        )
         session.add(sr)
         await session.flush()  # нужен sr.id — и для файлов на диске, и для FK у ответов
 
@@ -677,13 +679,21 @@ async def service_request_detail(request: Request, request_id: int):
     async with get_session() as session:
         sr = await _service_request_or_404(session, request_id, account)
         lang = get_lang(request)
+        await session.refresh(sr, attribute_names=["product"])
+        is_paid = sr.status == ServiceRequestStatus.PAID
         return await render(
             request, "service_request_detail.html",
             sr={
                 "id": sr.id, "status": sr.status.value, "product_title": sr.product.title(lang),
                 "final_price": float(sr.final_price) if sr.final_price is not None else None,
-                "currency": sr.currency, "admin_note": sr.admin_note,
-                "deliverable_path": sr.deliverable_path, "deliverable_filename": sr.deliverable_filename,
+                "currency": sr.currency,
+                "response_time_text": sr.product.response_time_text,
+                "client_note": sr.client_note,
+                # Ответ и файл админа видны клиенту ТОЛЬКО после оплаты — до этого
+                # видно только "готово к оплате" и цену, без содержимого ответа.
+                "admin_note": sr.admin_note if is_paid else None,
+                "deliverable_path": sr.deliverable_path if is_paid else None,
+                "deliverable_filename": sr.deliverable_filename if is_paid else None,
                 "answers": [{"question_text": a.text(lang), "question_type": a.question_type.value,
                              "answer_text": a.answer_text, "answer_bool": a.answer_bool,
                              "answer_file_path": a.answer_file_path, "answer_file_filename": a.answer_file_filename}

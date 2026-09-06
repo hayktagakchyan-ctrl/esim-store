@@ -24,6 +24,10 @@
       {% endfor %}
     </div>
 
+    {% if sr.client_note %}
+    <div class="card"><div class="hint" style="margin-bottom:4px;">{{ t("service_client_note_label") }}</div>{{ sr.client_note }}</div>
+    {% endif %}
+
     {% if sr.admin_note %}
     <div class="card"><div class="hint" style="margin-bottom:4px;">{{ t("service_admin_note") }}</div>{{ sr.admin_note }}</div>
     {% endif %}
@@ -46,6 +50,7 @@
     </div>
     {% elif sr.status == "submitted" %}
     <p class="hint" style="text-align:center;">{{ t("service_status_submitted_hint") }}</p>
+    {% if sr.response_time_text %}<p class="hint" style="text-align:center;">{{ t("service_response_time_label") }}: {{ sr.response_time_text }}</p>{% endif %}
     {% endif %}
   </div>
 </section>

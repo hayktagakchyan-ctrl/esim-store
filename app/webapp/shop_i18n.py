@@ -165,6 +165,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "en": "Not enough balance — top up to pay.",
     },
     "service_download_button": {"ru": "Скачать файл", "hy": "Ներբեռնել ֆայլը", "en": "Download file"},
+    "service_client_note_label": {"ru": "Комментарий (необязательно)", "hy": "Մեկնաբանություն (կամընտիր)", "en": "Comment (optional)"},
+    "service_response_time_label": {"ru": "Обычно отвечаем", "hy": "Սովորաբար պատասխանում ենք", "en": "Typical response time"},
     "notif_open_btn": {"ru": "Открыть", "hy": "Բացել", "en": "Open"},
     "my_chats_title": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
     "my_chats_empty": {"ru": "Пока нет ни одного чата.", "hy": "Դեռ ոչ մի չաթ չկա։", "en": "No chats yet."},

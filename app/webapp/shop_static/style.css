@@ -35,8 +35,19 @@
   --sidebar-w: 264px;
   --sidebar-w-collapsed: 76px;
   --blur: blur(20px) saturate(160%);
-  --font-display: 'Unbounded', 'Noto Sans Armenian', sans-serif;
-  --font-body: 'Geist', 'Noto Sans Armenian', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  /* Раньше тут были Unbounded/Geist/Noto Sans Armenian с Google Fonts CDN —
+     убрали: загрузка шрифтов с fonts.googleapis.com передаёт IP посетителя
+     Google без согласия, это отдельный, хорошо задокументированный риск по
+     GDPR (в Германии по этому поводу были реальные судебные иски и массовые
+     письма-претензии владельцам сайтов). Системные шрифты — без обращения
+     к третьим лицам вообще, риска нет. Армянский текст отрисуется системным
+     шрифтом ОС — на современных Windows/macOS/iOS/Android он у армянского
+     алфавита в целом приличный, просто не настолько стилизованный.
+     Если захочешь вернуть точно Unbounded/Geist — можно самостоятельно
+     разместить файлы шрифтов у себя на сервере (не через Google CDN),
+     тогда риска не будет и внешний вид сохранится. */
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
 [data-theme="dark"] {

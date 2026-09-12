@@ -171,6 +171,11 @@ async def terms_page(request: Request):
     return await render(request, "terms.html")
 
 
+@router.get("/shop/cookies", response_class=HTMLResponse)
+async def cookies_page(request: Request):
+    return await render(request, "cookies.html")
+
+
 async def _fetch_country_list(session):
     """
     Список стран для выбора — только отдельные страны (не региональные пакеты,

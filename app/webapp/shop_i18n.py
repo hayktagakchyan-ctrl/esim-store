@@ -166,6 +166,11 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "service_download_button": {"ru": "Скачать файл", "hy": "Ներբեռնել ֆայլը", "en": "Download file"},
     "service_client_note_label": {"ru": "Комментарий (необязательно)", "hy": "Մեկնաբանություն (կամընտիր)", "en": "Comment (optional)"},
+    "service_file_upload_hint": {
+        "ru": "Прикрепляй только то, что реально нужно для этого вопроса — файл увидит наша команда, чтобы обработать заявку (см. Политику конфиденциальности).",
+        "hy": "Կցիր միայն այն, ինչ իրականում անհրաժեշտ է այս հարցի համար — ֆայլը կտեսնի մեր թիմը՝ հայտը մշակելու համար։",
+        "en": "Only attach what's actually needed for this question — our team will see the file in order to process your request (see the Privacy Policy).",
+    },
     "service_response_time_label": {"ru": "Обычно отвечаем", "hy": "Սովորաբար պատասխանում ենք", "en": "Typical response time"},
     "notif_open_btn": {"ru": "Открыть", "hy": "Բացել", "en": "Open"},
     "my_chats_title": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
@@ -189,6 +194,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
 
     "footer_privacy_link": {"ru": "Политика конфиденциальности", "hy": "Գաղտնիության քաղաքականություն", "en": "Privacy Policy"},
     "footer_terms_link": {"ru": "Условия использования", "hy": "Օգտագործման պայմաններ", "en": "Terms of Service"},
+    "footer_cookies_link": {"ru": "Cookies", "hy": "Cookies", "en": "Cookies"},
     "agree_to_terms": {
         "ru": 'Регистрируясь, я соглашаюсь с <a href="/shop/terms">условиями использования</a> и <a href="/shop/privacy">политикой конфиденциальности</a>.',
         "hy": 'Գրանցվելով՝ ես համաձայն եմ <a href="/shop/terms">օգտագործման պայմաններին</a> և <a href="/shop/privacy">գաղտնիության քաղաքականությանը</a>։',
@@ -199,53 +205,74 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "privacy_body": {
         "ru": """
 <p><strong>Какие данные мы собираем.</strong> Email и пароль (хранится не в открытом виде,
-а в виде хеша — мы сами не можем его увидеть), история твоих заказов (какой пакет/услугу
-купил, статус, цена), переписка в чате поддержки/лаунжа/туров, если ты им пользовался.
-IP-адрес используется только для защиты от подбора пароля и злоупотреблений.</p>
-<p><strong>Зачем.</strong> Чтобы оформить и выдать твой заказ, показать историю покупок,
-ответить на вопросы в чате, защититься от мошенничества.</p>
-<p><strong>С кем делимся.</strong> С платёжными системами (Idram, OxaPay) — только то, что
-нужно для проведения платежа. С esimaccess.com — данные о купленном пакете, чтобы выпустить
-eSIM. Мы не продаём и не передаём твои данные никому ещё.</p>
-<p><strong>Cookies.</strong> Используем один служебный cookie для входа в аккаунт — без него
-сайт не запомнит, что ты вошёл.</p>
-<p><strong>Сколько храним.</strong> Пока существует твой аккаунт, либо пока это требуется по
+а в виде хеша — мы сами не можем его увидеть), история заказов (какой пакет/услугу купил,
+статус, цена), переписка в чате поддержки, ответы в форме заказа услуги (лаунж/туры) —
+включая файл, если вопрос его требует (например, скан билета). Если использовал
+реферальную ссылку — кто кого пригласил. IP-адрес используется только для защиты от
+подбора пароля и злоупотреблений.</p>
+<p><strong>Зачем.</strong> Чтобы оформить и выдать заказ, показать историю покупок,
+ответить на вопросы в чате, начислить реферальный бонус, защититься от мошенничества.</p>
+<p><strong>С кем делимся.</strong> С платёжными системами (Idram, OxaPay, Stripe) — только
+то, что нужно для проведения платежа. С esimaccess.com — данные о купленном пакете, чтобы
+выпустить eSIM. С Resend (сервис отправки писем) — твой email и текст письма, когда мы
+подтверждаем регистрацию или восстанавливаем пароль. Мы не продаём и не передаём твои
+данные никому ещё.</p>
+<p><strong>Cookies и похожие технологии.</strong> Один служебный cookie для входа в
+аккаунт — без него сайт не запомнит, что ты вошёл. Отдельно в памяти браузера (localStorage)
+сохраняются настройки интерфейса (светлая/тёмная тема, свёрнута ли боковая панель) — это
+не cookie и не передаётся нам на сервер. Подробнее — на странице
+<a href="/shop/cookies">Cookies</a>.</p>
+<p><strong>Сколько храним.</strong> Пока существует аккаунт, либо пока это требуется по
 закону (например, для бухгалтерского учёта).</p>
 <p><strong>Твои права.</strong> Можешь запросить удаление аккаунта и своих данных — напиши в
 поддержку через сайт.</p>
-""",
+"""
+,
         "hy": """
-<p><strong>Ինչ տվյալներ ենք հավաքում։</strong> Էլ. փոստ և գաղտնաբառ (պահվում է ոչ
-բացահայտ տեսքով, այլ որպես հեշ), քո պատվերների պատմությունը (ինչ ես գնել, կարգավիճակ,
-գին), նամակագրությունը չաթում, եթե օգտվել ես դրանից։ IP-հասցեն օգտագործվում է միայն
+<p><strong>Ինչ տվյալներ ենք հավաքում։</strong> Էլ. փոստ և գաղտնաբառ (պահվում է որպես
+հեշ, ոչ բացահայտ տեսքով), պատվերների պատմությունը, նամակագրությունը չաթում, պատասխանները
+ծառայության պատվերի ձևաթղթում (լաունջ/տուրեր), այդ թվում՝ ֆայլը, եթե հարցը դա պահանջում
+է։ Եթե օգտվել ես ռեֆերալ հղումից՝ ով ում է հրավիրել։ IP-հասցեն օգտագործվում է միայն
 գաղտնաբառի ենթադրման դեմ պաշտպանության համար։</p>
 <p><strong>Ինչու։</strong> Պատվերդ ձևակերպելու և տրամադրելու, գնումների պատմությունը
-ցույց տալու, չաթում հարցերին պատասխանելու, խարդախությունից պաշտպանվելու համար։</p>
-<p><strong>Ում հետ ենք կիսվում։</strong> Վճարային համակարգերի հետ (Idram, OxaPay) — միայն
-վճարման համար անհրաժեշտ տվյալները։ esimaccess.com-ի հետ՝ գնված փաթեթի մասին տվյալները՝
-eSIM թողարկելու համար։ Քո տվյալները ոչ ոքի չենք վաճառում։</p>
-<p><strong>Cookies.</strong> Օգտագործում ենք մեկ ծառայողական cookie՝ հաշվի մուտքի համար։</p>
-<p><strong>Որքա՞ն ենք պահում։</strong> Քանի դեռ գոյություն ունի քո հաշիվը, կամ քանի դեռ դա
+ցույց տալու, չաթում հարցերին պատասխանելու, ռեֆերալ բոնուս հաշվարկելու, խարդախությունից
+պաշտպանվելու համար։</p>
+<p><strong>Ում հետ ենք կիսվում։</strong> Վճարային համակարգերի հետ (Idram, OxaPay,
+Stripe) — միայն վճարման համար անհրաժեշտ տվյալները։ esimaccess.com-ի հետ՝ գնված փաթեթի
+մասին տվյալները՝ eSIM թողարկելու համար։ Resend-ի հետ (նամակների ուղարկման ծառայություն)՝
+քո էլ. փոստը և նամակի տեքստը։ Ոչ ոքի չենք վաճառում քո տվյալները։</p>
+<p><strong>Cookies և նմանատիպ տեխնոլոգիաներ։</strong> Մեկ ծառայողական cookie՝ հաշվի
+մուտքի համար։ Առանձին՝ բրաուզերի հիշողությունում (localStorage) պահվում են ինտերֆեյսի
+կարգավորումները (թեմա, կողային վահանակի վիճակը) — սա cookie չէ և մեզ չի փոխանցվում։
+Մանրամասն՝ <a href="/shop/cookies">Cookies</a> էջում։</p>
+<p><strong>Որքա՞ն ենք պահում։</strong> Քանի դեռ գոյություն ունի հաշիվը, կամ քանի դեռ դա
 պահանջվում է օրենքով։</p>
 <p><strong>Քո իրավունքները։</strong> Կարող ես պահանջել հաշվի և տվյալների ջնջում՝ գրելով
-աջակցությանը բոտի միջոցով։</p>
-""",
+աջակցությանը կայքի միջոցով։</p>
+"""
+,
         "en": """
 <p><strong>What we collect.</strong> Your email and password (stored as a hash, never in
-plain text — we can't see it either), your order history (what you bought, status, price),
-support/lounge/tour chat messages if you've used them. Your IP address is used only for
-abuse and brute-force protection.</p>
+plain text), order history, support chat messages, your answers in a service order form
+(lounge/tours) — including a file if the question requires one (e.g. a ticket scan). If
+you used a referral link — who referred whom. Your IP address is used only for abuse and
+brute-force protection.</p>
 <p><strong>Why.</strong> To process and deliver your orders, show your purchase history,
-answer chat questions, and protect against fraud.</p>
-<p><strong>Who we share it with.</strong> Payment providers (Idram, OxaPay) — only what's
-needed to process payment. esimaccess.com — your purchased package details, to issue the
-eSIM. We do not sell your data to anyone.</p>
-<p><strong>Cookies.</strong> One functional cookie to keep you logged in.</p>
+answer chat questions, credit referral bonuses, and protect against fraud.</p>
+<p><strong>Who we share it with.</strong> Payment providers (Idram, OxaPay, Stripe) — only
+what's needed to process payment. esimaccess.com — your purchased package details, to issue
+the eSIM. Resend (email delivery service) — your email and the message text, when we
+confirm registration or a password reset. We do not sell your data to anyone.</p>
+<p><strong>Cookies and similar technology.</strong> One functional cookie to keep you
+logged in. Separately, your browser's local storage keeps interface preferences (light/dark
+theme, whether the sidebar is collapsed) — this is not a cookie and isn't sent to us.
+Details on the <a href="/shop/cookies">Cookies</a> page.</p>
 <p><strong>Retention.</strong> As long as your account exists, or as required by law (e.g.
 accounting).</p>
-<p><strong>Your rights.</strong> You can request account and data deletion — contact support
-via the bot.</p>
-""",
+<p><strong>Your rights.</strong> You can request account and data deletion — contact
+support via the site.</p>
+"""
+,
     },
 
     "terms_title": {"ru": "Условия использования", "hy": "Օգտագործման պայմաններ", "en": "Terms of Service"},
@@ -253,18 +280,23 @@ via the bot.</p>
         "ru": """
 <p>Мы продаём цифровые товары и услуги: eSIM с мобильным интернетом, доступ в лаунж-зоны
 аэропортов, туры. Выдача eSIM зависит от партнёра esimaccess.com — в редких случаях
-возможна задержка или отказ на их стороне, о чём мы сообщим и поможем решить вопрос
-(возврат или замена).</p>
-<p><strong>Оплата.</strong> Цены указаны в валюте пакета. Оплата — картой через Idram или
-криптовалютой. Оплачивая заказ, ты подтверждаешь, что данные карты/кошелька принадлежат
-тебе.</p>
-<p><strong>Возврат.</strong> Если что-то пошло не так с твоим заказом — напиши в поддержку,
-разберём ситуацию индивидуально.</p>
-<p><strong>Аккаунт.</strong> Один человек — один аккаунт. Ты отвечаешь за сохранность своего
-пароля. Сервис предназначен для лиц старше 18 лет (или совершеннолетия по законам твоей
-страны).</p>
-<p><strong>Лаунж и туры</strong> оформляются через переписку с нами — итоговые условия и
-цена согласовываются в чате перед оплатой.</p>
+возможна задержка или отказ на их стороне, о чём мы сообщим и поможем решить вопрос.</p>
+<p><strong>Оплата.</strong> Цены указаны в валюте пакета. Оплата — картой (Idram, Stripe)
+или криптовалютой (OxaPay), либо с внутреннего баланса аккаунта. Оплачивая заказ, ты
+подтверждаешь, что данные карты/кошелька принадлежат тебе.</p>
+<p><strong>Возврат.</strong> Возвраты рассматриваются индивидуально нашей командой вручную
+— напиши в поддержку через сайт, опиши ситуацию. Так как eSIM и доступ в лаунж/туры —
+цифровые товары и услуги, которые активируются практически сразу после оплаты, полный
+возврат не гарантирован, если товар/услуга уже были фактически предоставлены (например,
+QR-код eSIM выпущен и активирован, доступ в лаунж использован). Если по нашей вине или по
+вине esimaccess.com услуга не была оказана — сделаем возврат или замену.</p>
+<p><strong>Заявки на услуги (лаунж, туры).</strong> Оформляются через форму на сайте.
+Ориентировочная цена в карточке услуги может отличаться от финальной — обычно мы отвечаем
+в срок, указанный в самой услуге; финальную цену и детали подтверждаем перед оплатой,
+которую в этом случае можно провести с баланса аккаунта.</p>
+<p><strong>Аккаунт.</strong> Один человек — один аккаунт. Ты отвечаешь за сохранность
+своего пароля. Сервис предназначен для лиц старше 18 лет (или совершеннолетия по законам
+твоей страны).</p>
 <p><strong>Ограничение ответственности.</strong> Мы не несём ответственности за перебои в
 работе сторонних сервисов (esimaccess, платёжные системы, сотовые операторы), от которых
 зависит предоставление услуги.</p>
@@ -273,15 +305,19 @@ via the bot.</p>
 <p>Մենք վաճառում ենք թվային ապրանքներ և ծառայություններ՝ eSIM ինտերնետով, օդանավակայանի
 լաունջ հասանելիություն, տուրեր։ eSIM-ի տրամադրումը կախված է esimaccess.com գործընկերոջից՝
 հազվադեպ հնարավոր է ուշացում կամ մերժում նրանց կողմից, որի մասին կտեղեկացնենք և
-կօգնենք լուծել հարցը (վերադարձ կամ փոխարինում)։</p>
-<p><strong>Վճարում։</strong> Գները նշված են փաթեթի արժույթով։ Վճարումը՝ քարտով Idram-ի
-միջոցով կամ կրիպտոարժույթով։</p>
-<p><strong>Վերադարձ։</strong> Եթե ինչ-որ բան այն չէ քո պատվերի հետ՝ գրիր աջակցությանը,
-կքննարկենք առանձին։</p>
+կօգնենք լուծել հարցը։</p>
+<p><strong>Վճարում։</strong> Գները նշված են փաթեթի արժույթով։ Վճարումը՝ քարտով (Idram,
+Stripe), կրիպտոարժույթով (OxaPay), կամ հաշվի հաշվեկշռից։</p>
+<p><strong>Վերադարձ։</strong> Վերադարձերը դիտարկվում են անհատապես մեր թիմի կողմից ձեռքով
+— գրիր աջակցությանը կայքի միջոցով, նկարագրիր իրավիճակը։ Քանի որ eSIM-ը և լաունջ/տուր
+հասանելիությունը թվային ապրանք/ծառայություն են, որոնք ակտիվանում են վճարումից անմիջապես
+հետո, լրիվ վերադարձը երաշխավորված չէ, եթե ապրանքը/ծառայությունը արդեն փաստացի
+տրամադրվել է։</p>
+<p><strong>Ծառայությունների հայտեր (լաունջ, տուրեր)։</strong> Ձևակերպվում են կայքի ձևաթղթի
+միջոցով։ Ապրանքի քարտում գինը մոտավոր է. վերջնական գինը և մանրամասները հաստատվում են
+վճարումից առաջ, որը այս դեպքում կարելի է կատարել հաշվի հաշվեկշռից։</p>
 <p><strong>Հաշիվ։</strong> Մեկ մարդ՝ մեկ հաշիվ։ Դու պատասխանատու ես գաղտնաբառիդ
 պահպանման համար։ Ծառայությունը նախատեսված է 18 տարեկանից բարձր անձանց համար։</p>
-<p><strong>Լաունջ և տուրեր</strong> ձևակերպվում են մեզ հետ նամակագրության միջոցով՝
-վերջնական պայմանները և գինը համաձայնեցվում են չաթում մինչ վճարումը։</p>
 <p><strong>Պատասխանատվության սահմանափակում։</strong> Մենք պատասխանատվություն չենք կրում
 երրորդ կողմի ծառայությունների (esimaccess, վճարային համակարգեր, օպերատորներ) խափանումների
 համար, որոնցից կախված է ծառայության մատուցումը։</p>
@@ -289,18 +325,26 @@ via the bot.</p>
         "en": """
 <p>We sell digital goods and services: eSIM data plans, airport lounge access, and tours.
 eSIM delivery depends on our partner esimaccess.com — in rare cases there may be a delay or
-failure on their end, which we'll notify you about and help resolve (refund or replacement).</p>
+failure on their end, which we'll notify you about and help resolve.</p>
 <p><strong>Payment.</strong> Prices are shown in the package's currency. Payment is by card
-via Idram or by crypto. By paying, you confirm the card/wallet used belongs to you.</p>
-<p><strong>Refunds.</strong> If something went wrong with your order, contact support and
-we'll review it individually.</p>
+(Idram, Stripe), crypto (OxaPay), or from your account balance. By paying, you confirm the
+card/wallet used belongs to you.</p>
+<p><strong>Refunds.</strong> Refunds are reviewed individually by our team, by hand —
+contact support via the site and describe the situation. Since eSIM and lounge/tour access
+are digital goods and services that activate almost immediately after payment, a full
+refund isn't guaranteed once the item/service has actually been provided (e.g. the eSIM QR
+code has been issued and activated, or lounge access was used). If the service wasn't
+delivered due to our fault or esimaccess.com's, we'll issue a refund or replacement.</p>
+<p><strong>Service requests (lounge, tours).</strong> Submitted through the form on the
+site. The estimated price on the service card may differ from the final one — we usually
+respond within the time stated on the service itself; the final price and details are
+confirmed before payment, which in this case can be made from your account balance.</p>
 <p><strong>Account.</strong> One person, one account. You're responsible for keeping your
 password secure. This service is intended for users 18 years or older (or the age of
 majority in your jurisdiction).</p>
-<p><strong>Lounge and tours</strong> are arranged through chat with us — final terms and
-price are agreed in chat before payment.</p>
-<p><strong>Limitation of liability.</strong> We are not liable for outages of third-party
-services (esimaccess, payment providers, mobile carriers) that the service depends on.</p>
+<p><strong>Limitation of liability.</strong> We are not responsible for outages of
+third-party services (esimaccess, payment providers, mobile carriers) that the delivery of
+the service depends on.</p>
 """,
     },
 
@@ -409,6 +453,52 @@ services (esimaccess, payment providers, mobile carriers) that the service depen
         "ru": "На большинстве смартфонов последних лет (iPhone начиная с XR/XS, многие Android-флагманы). Перед покупкой проверь в настройках телефона, поддерживает ли он eSIM.",
         "hy": "Վերջին տարիների սմարթֆոնների մեծ մասում (iPhone XR/XS-ից սկսած, շատ Android-ֆլագմաններ)։",
         "en": "Most recent smartphones (iPhone XR/XS and later, many Android flagships). Check your phone's settings before buying to confirm eSIM support.",
+    },
+
+    "cookies_title": {"ru": "Cookies", "hy": "Cookies", "en": "Cookies"},
+    "cookies_body": {
+        "ru": """
+<p>Мы используем только один cookie — служебный, для входа в аккаунт (без него сайт не
+запомнит, что ты вошёл). Он строго необходим для работы сайта, поэтому по закону не
+требует отдельного согласия — но мы всё равно рассказываем о нём здесь для прозрачности.</p>
+<p>Рекламных, аналитических или отслеживающих cookie мы не используем — на сайте нет ни
+Google Analytics, ни рекламных пикселей, ни похожих систем.</p>
+<p><strong>Локальное хранилище браузера (localStorage).</strong> Отдельно от cookies, в
+памяти твоего браузера сохраняются настройки интерфейса — выбранная тема (светлая/тёмная)
+и состояние боковой панели (свёрнута или нет). Это не передаётся на наш сервер и не
+используется для отслеживания — только чтобы не спрашивать эти настройки заново при
+следующем визите.</p>
+<p>Шрифты и другие статические файлы (стили, скрипты) загружаются с нашего собственного
+сервера, а не со сторонних CDN — так посторонние сервисы не получают данные о посетителях
+сайта просто от того, что они на него зашли.</p>
+""",
+        "hy": """
+<p>Մենք օգտագործում ենք միայն մեկ cookie՝ ծառայողական, հաշվի մուտքի համար։ Այն խիստ
+անհրաժեշտ է կայքի աշխատանքի համար, ուստի օրենքով առանձին համաձայնություն չի պահանջում,
+սակայն թափանցիկության համար այստեղ նշում ենք այն։</p>
+<p>Գովազդային, վերլուծական կամ հետևող cookie-ներ չենք օգտագործում — կայքում չկա ոչ Google
+Analytics, ոչ գովազդային պիքսելներ։</p>
+<p><strong>Բրաուզերի տեղական հիշողություն (localStorage)։</strong> Cookie-ից առանձին,
+բրաուզերիդ հիշողությունում պահվում են ինտերֆեյսի կարգավորումները՝ ընտրված թեման և
+կողային վահանակի վիճակը։ Սա մեզ չի փոխանցվում և հետևման համար չի օգտագործվում։</p>
+<p>Տառատեսակները և մյուս ստատիկ ֆայլերը բեռնվում են մեր սեփական սերվերից, ոչ թե
+արտաքին CDN-ից։</p>
+""",
+        "en": """
+<p>We use exactly one cookie — a functional one, to keep you logged in (without it the site
+won't remember that you've signed in). It's strictly necessary for the site to work, so it
+doesn't legally require separate consent — but we're describing it here anyway for
+transparency.</p>
+<p>We don't use advertising, analytics, or tracking cookies — there's no Google Analytics,
+no ad pixels, nothing like that on the site.</p>
+<p><strong>Browser local storage.</strong> Separately from cookies, your browser's local
+storage keeps interface preferences — the chosen theme (light/dark) and whether the sidebar
+is collapsed. This isn't sent to our server and isn't used for tracking — it's only there
+so we don't have to ask again on your next visit.</p>
+<p>Fonts and other static files (styles, scripts) are loaded from our own server, not from
+third-party CDNs — so outside services don't get visitor data just from someone loading the
+site.</p>
+""",
     },
 }
 

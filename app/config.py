@@ -33,17 +33,16 @@ class Settings(BaseSettings):
     # --- Сайт (app/webapp/shop.py) — сессия для логина покупателей ---
     SHOP_SESSION_SECRET_KEY: str = "change-me-too"
 
-    # --- Email (восстановление пароля на сайте) ---
-    # Если SMTP_HOST пуст — письма не отправляются, но ссылка на сброс пароля
-    # дублируется тебе в бот поддержки, чтобы можно было тестировать до того,
-    # как настроишь реальную почту.
-    SMTP_HOST: str = ""
-    SMTP_PORT: int = 587
-    SMTP_USERNAME: str = ""
-    SMTP_PASSWORD: str = ""
+    # --- Email (подтверждение регистрации, восстановление пароля) ---
+    # Через Resend (HTTP API, https://resend.com) — НЕ через SMTP: у Railway
+    # (и у многих других облачных хостингов) исходящий SMTP на 587 порту либо
+    # заблокирован, либо очень нестабилен ("Network is unreachable"/таймауты
+    # в логах — ровно этот случай). HTTP на 443 порту так не блокируют.
+    # Если RESEND_API_KEY пуст — письма не отправляются, но ссылка дублируется
+    # тебе в бот поддержки, чтобы можно было тестировать без настроенной почты.
+    RESEND_API_KEY: str = ""
     SMTP_FROM_EMAIL: str = "noreply@example.com"
     SMTP_FROM_NAME: str = "eSIM Store"  # то, что клиент увидит как имя отправителя вместо голого адреса
-    SMTP_USE_TLS: bool = True
 
     # --- Оплата: Idram (AMD, карты/счёт Idram) ---
     # Протокол EDP полностью подтверждён официальным документом "Idram Payment

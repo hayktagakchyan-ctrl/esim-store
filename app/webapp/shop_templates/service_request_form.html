@@ -28,6 +28,7 @@
                   style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:14px;"></textarea>
         {% else %}
         <input type="file" name="answer_file_{{ q.id }}" {{ 'required' if q.is_required }}>
+        <p class="hint" style="margin-top:6px; font-size:12px;">{{ t("service_file_upload_hint") }}</p>
         {% endif %}
       </div>
       {% endfor %}

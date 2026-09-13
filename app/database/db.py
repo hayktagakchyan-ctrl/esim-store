@@ -89,6 +89,10 @@ async def _run_light_migrations(conn) -> None:
     if old_column_exists is not None:
         for col in ("question_text_ru", "question_text_hy", "question_text_en"):
             await conn.execute(text(f"UPDATE product_questions SET {col} = question_text WHERE {col} IS NULL"))
+        # Старая колонка была NOT NULL, а новый код в неё больше ничего не пишет —
+        # без этого каждая новая вставка падала с NotNullViolationError (поймали
+        # это в проде: POST /products/{id}/questions/new падал с 500).
+        await conn.execute(text("ALTER TABLE product_questions ALTER COLUMN question_text DROP NOT NULL"))
 
     # То же самое для снимка вопроса в ответах (ServiceRequestAnswer) — было
     # одно поле question_text, стало три (см. комментарий в models.py).
@@ -102,6 +106,9 @@ async def _run_light_migrations(conn) -> None:
     if old_answer_column_exists is not None:
         for col in ("question_text_ru", "question_text_hy", "question_text_en"):
             await conn.execute(text(f"UPDATE service_request_answers SET {col} = question_text WHERE {col} IS NULL"))
+        # Та же причина, что и у product_questions выше — старая колонка NOT NULL,
+        # новый код в неё не пишет.
+        await conn.execute(text("ALTER TABLE service_request_answers ALTER COLUMN question_text DROP NOT NULL"))
 
     # Срок ответа по услуге (Product) и комментарий клиента (ServiceRequest) —
     # добавлены позже, тоже просто новые nullable-колонки в уже существующих таблицах.

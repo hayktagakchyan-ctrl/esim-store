@@ -144,15 +144,11 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
 }
 .sidebar-head { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px 18px; }
 .logo { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
-.brand-logo { display: none !important; }
+.brand-logo { width: 28px; height: 28px; object-fit: cover; border-radius: 8px; flex-shrink: 0; }
+.brand-logo-dark { display: none; }
+[data-theme="dark"] .brand-logo-light { display: none; }
+[data-theme="dark"] .brand-logo-dark { display: block; }
 .sidebar-close { display: none; }
-
-/* Логотип "K" в зелёном квадрате — как в Figma navbar/footer, без файла картинки */
-.sidebar-head .logo::before, .mobile-topbar .logo::before {
-  content: "K"; display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; border-radius: 10px; background: var(--accent-gradient);
-  color: #08090D; font-family: var(--font-display); font-weight: 900; font-size: 14px; flex-shrink: 0;
-}
 
 .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
 .nav-sep { height: 1px; background: var(--border); margin: 10px 6px; }

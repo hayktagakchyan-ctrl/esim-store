@@ -24,6 +24,7 @@
 
   <div class="card">
     <form method="post" action="{{ '/packages/' ~ package.id ~ '/edit' if package else '/packages/new' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field-row">
         <div class="field">
           <div class="label">Код страны (ISO, напр. AM)</div>
@@ -83,6 +84,7 @@
   {% if package %}
   <div class="card">
     <form method="post" action="/packages/{{ package.id }}/delete" onsubmit="return confirm('Удалить пакет из каталога?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn danger" type="submit">Удалить пакет</button>
     </form>
   </div>

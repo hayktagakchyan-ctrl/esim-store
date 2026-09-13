@@ -31,6 +31,7 @@ from app.database.models import (
     ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
+from app.csrf import get_or_create_csrf_token
 from app.services.payments import idram
 from app.services.payments.oxapay import oxapay_client, OxaPayError
 from app.services.payments import stripe_pay
@@ -133,7 +134,7 @@ VERIFICATION_TOKEN_TTL = timedelta(hours=48)
 
 
 async def render(request: Request, template_name: str, **context):
-    """Общий рендер: добавляет lang/t()/account во все страницы сайта разом."""
+    """Общий рендер: добавляет lang/t()/account/csrf_token во все страницы сайта разом."""
     lang = get_lang(request)
     account = await get_current_account(request)
     context.update({
@@ -142,6 +143,7 @@ async def render(request: Request, template_name: str, **context):
         "t": lambda key: translate(key, lang),
         "account": account,
         "stripe_enabled": bool(settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY),
+        "csrf_token": get_or_create_csrf_token(request),
     })
     return templates.TemplateResponse(template_name, context)
 
@@ -877,6 +879,20 @@ async def register_submit(
     ref: str = Form(""),
 ):
     email = email.strip().lower()
+
+    # Вход и сброс пароля были защищены от перебора, а регистрация — нет:
+    # можно было скриптом спамить создание аккаунтов (и заодно наши письма
+    # через Resend, что бьёт по репутации домена-отправителя), а по разнице
+    # ответов — перебирать, какие email уже зарегистрированы.
+    rate_key = f"register:{request.client.host}"
+    if await is_blocked(rate_key):
+        return await render(
+            request, "register.html",
+            error="Слишком много попыток — подожди несколько минут и попробуй снова.",
+            next=next, ref=ref,
+        )
+    await register_failure(rate_key)  # считаем каждую попытку регистрации, не только неудачную
+
     if not agree:
         return await render(request, "register.html", error="Нужно согласиться с условиями использования.", next=next, ref=ref)
     if "@" not in email or "." not in email:
@@ -920,8 +936,8 @@ async def resend_verification(request: Request, email: str = Form(...), next: st
     email = email.strip().lower()
     rate_key = f"{request.client.host}:{email}:verify"
 
-    if not is_blocked(rate_key):
-        register_failure(rate_key)  # используем как счётчик отправок, не только неудач
+    if not await is_blocked(rate_key):
+        await register_failure(rate_key)  # используем как счётчик отправок, не только неудач
         async with get_session() as session:
             account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
             if account is not None and not account.is_verified:
@@ -975,7 +991,7 @@ async def login_submit(request: Request, email: str = Form(...), password: str =
     email = email.strip().lower()
     rate_key = f"{request.client.host}:{email}"
 
-    if is_blocked(rate_key):
+    if await is_blocked(rate_key):
         return await render(
             request, "login.html", error="Слишком много попыток — подожди несколько минут и попробуй снова.", next=next,
         )
@@ -984,7 +1000,7 @@ async def login_submit(request: Request, email: str = Form(...), password: str =
         account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
 
     if account is None or not verify_password(password, account.password_hash):
-        register_failure(rate_key)
+        await register_failure(rate_key)
         return await render(request, "login.html", error="Неверный email или пароль.", next=next)
 
     if not account.is_verified:
@@ -994,7 +1010,7 @@ async def login_submit(request: Request, email: str = Form(...), password: str =
             next=next, unverified_email=email,
         )
 
-    reset_rate_limit(rate_key)
+    await reset_rate_limit(rate_key)
     request.session["account_id"] = account.id
     return RedirectResponse(url=_safe_next(next), status_code=302)
 
@@ -1015,11 +1031,11 @@ async def forgot_password_submit(request: Request, email: str = Form(...)):
     email = email.strip().lower()
     rate_key = f"{request.client.host}:{email}:reset"
 
-    if is_blocked(rate_key):
+    if await is_blocked(rate_key):
         # Тот же самый ответ, что и в обычном случае — не выдаём, что сработал лимит,
         # иначе это тоже способ проверить, существует ли такой email в базе.
         return await render(request, "forgot_password.html", error=None, sent=True)
-    register_failure(rate_key)  # считаем каждый запрос как "попытку", не только неудачную
+    await register_failure(rate_key)  # считаем каждый запрос как "попытку", не только неудачную
 
     async with get_session() as session:
         account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()

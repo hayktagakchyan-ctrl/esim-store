@@ -27,6 +27,7 @@
 
   <div class="card">
     <form method="post" action="/promo-codes/new">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field-row">
         <div class="field">
           <div class="label">Код (например WELCOME10)</div>
@@ -62,6 +63,7 @@
       </div>
     </div>
     <form method="post" action="/promo-codes/{{ c.id }}/toggle">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn secondary" type="submit">{{ "Выключить" if c.is_active else "Включить" }}</button>
     </form>
   </div>

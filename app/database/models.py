@@ -623,3 +623,20 @@ class AdminUser(Base):
     role: Mapped[AdminRole] = mapped_column(Enum(AdminRole), default=AdminRole.SUPPORT)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class RateLimitAttempt(Base):
+    """
+    Учёт попыток входа/регистрации/сброса пароля для защиты от перебора —
+    раньше жило в памяти процесса (app/rate_limit.py): терялось при каждом
+    рестарте (обычное дело при деплое) и не было общим между тремя разными
+    сервисами Railway (сайт, боты, админка — три независимых процесса).
+    Тут — переживает рестарт и одинаково видно всем, кто читает эту же базу.
+    Строки старше часа периодически подчищаются самим rate_limit.py, чтобы
+    таблица не росла бесконечно — это не архив, а просто короткий буфер.
+    """
+    __tablename__ = "rate_limit_attempts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(255), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)

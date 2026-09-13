@@ -138,7 +138,9 @@
     </main>
   </div>
 
-  <form id="start-support-form" method="post" action="/shop/chat/start" hidden></form>
+  <form id="start-support-form" method="post" action="/shop/chat/start" hidden>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+  </form>
   <script src="/shop-static/sidebar.js?v=2"></script>
 </body>
 </html>

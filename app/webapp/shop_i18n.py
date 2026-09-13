@@ -173,6 +173,23 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     },
     "service_response_time_label": {"ru": "Обычно отвечаем", "hy": "Սովորաբար պատասխանում ենք", "en": "Typical response time"},
     "notif_open_btn": {"ru": "Открыть", "hy": "Բացել", "en": "Open"},
+    "error_title": {"ru": "Страница не найдена", "hy": "Էջը չի գտնվել", "en": "Page not found"},
+    "error_home_button": {"ru": "На главную", "hy": "Գլխավոր էջ", "en": "Go to homepage"},
+    "error_404_text": {
+        "ru": "Такой страницы нет — возможно, в адресе опечатка или ссылка устарела.",
+        "hy": "Այդպիսի էջ չկա․ հնարավոր է՝ հասցեում վրիպակ կա կամ հղումը հնացել է։",
+        "en": "This page doesn't exist — the address may have a typo, or the link is outdated.",
+    },
+    "error_403_text": {
+        "ru": "Нет доступа к этой странице.",
+        "hy": "Այս էջին հասանելիություն չկա։",
+        "en": "You don't have access to this page.",
+    },
+    "error_500_text": {
+        "ru": "Что-то пошло не так с нашей стороны. Мы уже знаем о проблеме — попробуй ещё раз через пару минут.",
+        "hy": "Ինչ-որ բան սխալ գնաց մեր կողմից։ Մենք արդեն գիտենք խնդրի մասին․ փորձիր մի քանի րոպեից։",
+        "en": "Something went wrong on our side. We're aware of it — please try again in a couple of minutes.",
+    },
     "my_chats_title": {"ru": "Мои чаты", "hy": "Իմ չաթերը", "en": "My chats"},
     "my_chats_empty": {"ru": "Пока нет ни одного чата.", "hy": "Դեռ ոչ մի չաթ չկա։", "en": "No chats yet."},
     "new_support_chat": {"ru": "🆘 Написать в поддержку", "hy": "🆘 Գրել աջակցությանը", "en": "🆘 Contact support"},

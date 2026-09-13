@@ -22,8 +22,10 @@ from app.database.models import (
     Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode,
     ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
     Notification, NotificationType, AdminUser, AdminRole, ReferralBonus, Review,
+    Payment, PaymentProvider,
 )
 from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
+from app.csrf import get_or_create_csrf_token, verify_csrf
 from app.services.esimaccess import esimaccess_client, ESimAccessError
 from app.webapp.payments import _fulfill_order, notify
 from app.webapp.uploads import save_service_file
@@ -44,6 +46,21 @@ async def on_startup():
     # Та же логика, что и в app/webapp/app.py — таблицы должны быть готовы
     # независимо от того, какой из трёх сервисов Railway стартовал первым.
     await init_db()
+
+
+@app.middleware("http")
+async def csrf_protection(request: Request, call_next):
+    """См. подробное объяснение в app/webapp/app.py — тот же механизм, тут
+    проще: вся админка на сессионных cookie, исключений по путям не нужно.
+    Порядок регистрации ниже (до add_middleware(SessionMiddleware)) важен
+    по той же причине, что и в app/webapp/app.py — иначе request.session
+    ещё не существует в момент проверки."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if not await verify_csrf(request):
+            return templates.TemplateResponse(
+                "error.html", {"request": request, "status_code": 403}, status_code=403,
+            )
+    return await call_next(request)
 
 
 app.add_middleware(
@@ -70,10 +87,11 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 def _admin_template_context(request: Request) -> dict:
     """Доступно во ВСЕХ шаблонах без явной передачи — текущая роль вошедшего
     админа, чтобы прятать/показывать то, что зависит от прав (напр. правку
-    баланса — см. users_list.html)."""
+    баланса — см. users_list.html), и CSRF-токен для форм (см. app/csrf.py)."""
     return {
         "is_full_admin": request.session.get("admin_role", AdminRole.FULL.value) == AdminRole.FULL.value,
         "admin_login": request.session.get("admin_login", settings.ADMIN_PANEL_LOGIN),
+        "csrf_token": get_or_create_csrf_token(request),
     }
 
 
@@ -120,13 +138,13 @@ async def login_form(request: Request):
 @app.post("/login")
 async def login_submit(request: Request, login: str = Form(...), password: str = Form(...)):
     rate_key = f"{request.client.host}:{login}"
-    if is_blocked(rate_key):
+    if await is_blocked(rate_key):
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Слишком много попыток — подожди несколько минут."}
         )
 
     if login == settings.ADMIN_PANEL_LOGIN and password == settings.ADMIN_PANEL_PASSWORD:
-        reset_rate_limit(rate_key)
+        await reset_rate_limit(rate_key)
         request.session["authenticated"] = True
         request.session["admin_role"] = AdminRole.FULL.value
         request.session["admin_login"] = login
@@ -138,13 +156,13 @@ async def login_submit(request: Request, login: str = Form(...), password: str =
         )).scalar_one_or_none()
 
     if admin is not None and verify_password(password, admin.password_hash):
-        reset_rate_limit(rate_key)
+        await reset_rate_limit(rate_key)
         request.session["authenticated"] = True
         request.session["admin_role"] = admin.role.value
         request.session["admin_login"] = admin.login
         return RedirectResponse(url="/dashboard", status_code=302)
 
-    register_failure(rate_key)
+    await register_failure(rate_key)
     return templates.TemplateResponse(
         "login.html", {"request": request, "error": "Неверный логин или пароль"}
     )
@@ -309,9 +327,13 @@ async def order_detail(request: Request, order_id: int, _=Depends(require_login)
         if order is None:
             raise HTTPException(status_code=404, detail="Заказ не найден")
         await session.refresh(order, attribute_names=["user", "package"])
+        payment = (
+            await session.execute(select(Payment).where(Payment.order_id == order.id))
+        ).scalar_one_or_none()
 
     return templates.TemplateResponse(
-        "order_detail.html", {"request": request, "order": order, "statuses": list(OrderStatus)}
+        "order_detail.html",
+        {"request": request, "order": order, "statuses": list(OrderStatus), "payment": payment},
     )
 
 
@@ -323,15 +345,34 @@ async def refund_order(
         order = await session.get(Order, order_id)
         if order is None:
             raise HTTPException(status_code=404, detail="Заказ не найден")
+        if order.status == OrderStatus.REFUNDED:
+            # Форма и так прячется на странице для уже возвращённых заказов, но
+            # это только на уровне интерфейса — отдельный прямой POST (например,
+            # через "назад" в браузере и повторную отправку формы) мог бы
+            # списать баланс во второй раз. Проверяем и на сервере тоже.
+            return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+        payment = (
+            await session.execute(select(Payment).where(Payment.order_id == order.id))
+        ).scalar_one_or_none()
+
         order.status = OrderStatus.REFUNDED
         order.refund_reason = reason
-        await session.commit()
 
-        # TODO: когда подключится автоматический возврат у платёжного провайдера —
-        # здесь же вызвать его API. Пока что у Idram/Wallet Pay/OxaPay это не
-        # подтверждено документацией как отдельный однозначный эндпоинт — возврат
-        # оформляется вручную в личном кабинете нужного провайдера, а этот статус
-        # в первую очередь для твоего учёта и чтобы клиент видел актуальный статус.
+        if payment is not None and payment.provider == PaymentProvider.BALANCE and order.website_account_id:
+            # Деньги при такой оплате никуда не уходили от нас — это была просто
+            # запись на внутреннем балансе аккаунта. Возврат тут однозначный и
+            # безопасный: просто начисляем обратно ту же сумму, без обращения к
+            # внешнему провайдеру (для Idram/OxaPay/Stripe так сделать нельзя —
+            # там деньги реально уходят наружу, и без подтверждённого документацией
+            # эндпоинта возврата дёргать их API вслепую рискованно).
+            account = await session.get(WebsiteAccount, order.website_account_id)
+            if account is not None:
+                account.balance = round(account.balance + float(order.price_charged), 2)
+                order.refund_reason = (reason + " " if reason else "") + \
+                    f"[Автоматически возвращено на баланс: ${float(order.price_charged):.2f}]"
+
+        await session.commit()
 
     return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
 

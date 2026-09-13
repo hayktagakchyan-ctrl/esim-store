@@ -34,6 +34,7 @@
     </p>
 
     <form method="post" action="/packages/bulk-import">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field">
         <div class="label">Наценка, %</div>
         <input type="text" name="markup_percent" value="{{ default_markup }}" required>

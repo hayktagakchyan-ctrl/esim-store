@@ -24,6 +24,7 @@
 
   <div class="card">
     <form method="post" action="{{ '/categories/' ~ category.id ~ '/edit' if category else '/categories/new' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field-row">
         <div class="field" style="max-width:100px;">
           <div class="label">Иконка (эмодзи)</div>
@@ -77,6 +78,7 @@
   {% if category %}
   <div class="card">
     <form method="post" action="/categories/{{ category.id }}/delete" onsubmit="return confirm('Удалить категорию? Это возможно только если в ней нет товаров.');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn danger" type="submit">Удалить категорию</button>
     </form>
   </div>

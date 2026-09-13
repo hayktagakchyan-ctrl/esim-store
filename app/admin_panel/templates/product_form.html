@@ -24,6 +24,7 @@
 
   <div class="card">
     <form method="post" action="{{ '/products/' ~ product.id ~ '/edit' if product else '/products/new' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field">
         <div class="label">Категория</div>
         <select name="category_id">
@@ -97,6 +98,7 @@
   </div>
   <div class="card">
     <form method="post" action="/products/{{ product.id }}/delete" onsubmit="return confirm('Удалить товар?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn danger" type="submit">Удалить товар</button>
     </form>
   </div>

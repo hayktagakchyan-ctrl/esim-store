@@ -14,8 +14,9 @@ from datetime import datetime
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from sqlalchemy import select, func
 from starlette.middleware.sessions import SessionMiddleware
@@ -30,7 +31,10 @@ from app.database.models import (
 )
 from app.webapp.auth import get_current_user
 from app.webapp import webhooks, payments, products, conversations, admin_chat, shop
+from app.webapp.shop import templates  # тот же Jinja-движок, что у страниц сайта (со всеми фильтрами)
+from app.webapp.shop_i18n import get_lang, t as translate
 from app.webapp.payments import notify
+from app.csrf import verify_csrf
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -53,6 +57,42 @@ async def on_startup():
     # должны быть готовы независимо от того, кто стартовал первым. create_all
     # безопасно вызывать много раз: существующие таблицы не трогает.
     await init_db()
+
+
+@app.middleware("http")
+async def csrf_protection(request: Request, call_next):
+    """
+    Проверка CSRF-токена для всего, что меняет данные на сайте через
+    сессионную cookie (см. app/csrf.py — там подробное объяснение и почему
+    мини-апп бота с чатом поддержки сюда не входят: у них другая авторизация,
+    не cookie, её со стороннего сайта не подделать).
+    ВАЖНО: это должно стоять РАНЬШЕ add_middleware(SessionMiddleware) ниже по
+    файлу — Starlette собирает мидлвары так, что первый зарегистрированный
+    оказывается ближе к самому приложению (внутри), то есть выполняется уже
+    ПОСЛЕ того, как SessionMiddleware отработает и создаст request.session.
+    Если поменять порядок местами — request.session тут ещё не будет
+    существовать, и упадёт AssertionError (проверено вручную перед тем как
+    писать этот код, чтобы не гадать).
+    """
+    protected_prefixes = ("/shop",)
+    needs_check = (
+        request.method in ("POST", "PUT", "PATCH", "DELETE")
+        and request.url.path.startswith(protected_prefixes)
+    )
+    if needs_check:
+        if not await verify_csrf(request):
+            lang = get_lang(request)
+            return templates.TemplateResponse(
+                "error.html",
+                {
+                    "request": request, "lang": lang,
+                    "t": lambda key: translate(key, lang),
+                    "account": None, "stripe_enabled": False,
+                    "status_code": 403, "message_key": "error_403_text",
+                },
+                status_code=403,
+            )
+    return await call_next(request)
 
 
 app.add_middleware(
@@ -115,8 +155,38 @@ async def security_headers(request: Request, call_next):
     return response
 
 
+@app.exception_handler(StarletteHTTPException)
+async def friendly_error_page(request: Request, exc: StarletteHTTPException):
+    """
+    Раньше на любую ошибку (в т.ч. обычную опечатку в адресе) посетитель сайта
+    получал голый технический JSON вида {"detail": "Not Found"} — это и выглядит
+    сломанным, и лишний раз показывает, что под капотом, вместо нормальной
+    страницы. Теперь для страниц сайта (/shop/*) отдаём человеческую страницу
+    с навигацией, а для API-путей оставляем JSON как было (там его ждёт код
+    Mini App, а не человек).
+    """
+    is_api_like = not request.url.path.startswith("/shop") or request.url.path.startswith("/shop/api")
+    if is_api_like:
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
+
+    lang = get_lang(request)
+    message_key = {403: "error_403_text", 404: "error_404_text"}.get(exc.status_code, "error_500_text")
+    return templates.TemplateResponse(
+        "error.html",
+        {
+            "request": request,
+            "lang": lang,
+            "t": lambda key: translate(key, lang),
+            "account": None,  # не трогаем сессию: на странице ошибки это не нужно и может само упасть
+            "stripe_enabled": False,
+            "status_code": exc.status_code,
+            "message_key": message_key,
+        },
+        status_code=exc.status_code,
+    )
+
+
 app.include_router(webhooks.router)
-app.include_router(payments.router)
 app.include_router(products.router)
 app.include_router(conversations.router)
 app.include_router(admin_chat.router)

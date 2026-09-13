@@ -17,6 +17,7 @@
       </div>
       {% if account %}
       <form method="post" action="/shop/favorites/toggle" style="position:absolute; top:14px; right:14px; z-index:2;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="country_code" value="{{ country_code }}">
         <button class="fav-heart" type="submit">{{ "♥" if is_favorite else "♡" }}</button>
       </form>

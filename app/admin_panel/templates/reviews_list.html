@@ -36,6 +36,7 @@
         <td class="status-label">{{ r.created_at.strftime("%d.%m.%Y") }}</td>
         <td>
           <form method="post" action="/reviews/{{ r.id }}/delete" onsubmit="return confirm('Удалить отзыв?');" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="btn danger" type="submit" style="padding:6px 12px; font-size:12px;">Удалить</button>
           </form>
         </td>

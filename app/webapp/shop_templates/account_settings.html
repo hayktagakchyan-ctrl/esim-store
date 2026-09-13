@@ -17,6 +17,7 @@
       {% if success %}<p class="hint" style="color:#34C759;">{{ t("settings_password_changed") }}</p>{% endif %}
       {% if error %}<p class="error">{{ t(error) }}</p>{% endif %}
       <form method="post" action="/shop/account/settings">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="field">
           <label for="current_password">{{ t("current_password_label") }}</label>
           <div class="password-field">

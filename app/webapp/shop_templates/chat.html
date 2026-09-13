@@ -18,6 +18,7 @@
 <script>
 (function () {
   const conversationId = {{ conversation_id }};
+  const csrfToken = {{ csrf_token | tojson }};
   const labelYou = {{ t("chat_label_you") | tojson }};
   const labelSupport = {{ t("chat_label_support") | tojson }};
   const messagesEl = document.getElementById("chat-messages");
@@ -65,7 +66,7 @@
       await fetch(`/shop/api/chat/${conversationId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: `text=${encodeURIComponent(text)}`,
+        body: `text=${encodeURIComponent(text)}&csrf_token=${encodeURIComponent(csrfToken)}`,
       });
       await loadMessages();
     } catch (e) {

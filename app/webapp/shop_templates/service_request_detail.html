@@ -37,6 +37,7 @@
       <p style="font-size:20px; font-weight:700; margin-bottom:12px;">{{ sr.final_price }} {{ sr.currency }}</p>
       {% if balance >= sr.final_price %}
       <form method="post" action="/shop/account/service-requests/{{ sr.id }}/pay">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <button class="btn block" type="submit">{{ t("service_pay_balance_button") }}</button>
       </form>
       {% else %}

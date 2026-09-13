@@ -7,12 +7,14 @@
     {% if error %}<p class="error">{{ error }}</p>{% endif %}
     {% if unverified_email %}
     <form method="post" action="/shop/resend-verification" style="margin-bottom:16px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="email" value="{{ unverified_email }}">
       <input type="hidden" name="next" value="{{ next }}">
       <button class="btn secondary block" type="submit">{{ t("resend_verification") }}</button>
     </form>
     {% endif %}
     <form method="post" action="/shop/login">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <input type="hidden" name="next" value="{{ next }}">
       <div class="field">
         <label for="email">{{ t("email_label") }}</label>

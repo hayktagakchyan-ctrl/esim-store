@@ -43,6 +43,7 @@
 
   <div class="card">
     <form method="post" action="/packages/import">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field-row">
         <div class="field">
           <div class="label">Код страны (ISO, напр. IT)</div>

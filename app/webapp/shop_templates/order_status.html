@@ -43,6 +43,7 @@
       {% else %}
         <h3 style="margin-top:0;">{{ t("review_title") }}</h3>
         <form method="post" action="/shop/order/{{ order.guest_token }}/review">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
           <div class="field">
             <select name="rating" required style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
               <option value="5">★★★★★</option>

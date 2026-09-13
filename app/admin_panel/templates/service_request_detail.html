@@ -55,6 +55,7 @@
   <div class="card" style="max-width:480px;">
     <div class="label" style="margin-bottom:12px;">Отметить готовым</div>
     <form method="post" action="/service-requests/{{ sr.id }}/ready" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field">
         <div class="label">Финальная цена, {{ sr.currency }}</div>
         <input type="number" step="0.01" name="final_price" value="{{ sr.product.price if sr.product.price is not none else '' }}" required>
@@ -73,6 +74,7 @@
 
   <div class="card" style="max-width:480px;">
     <form method="post" action="/service-requests/{{ sr.id }}/cancel" onsubmit="return confirm('Отклонить заявку?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn danger" type="submit">Отклонить заявку</button>
     </form>
   </div>

@@ -48,6 +48,7 @@
         <td class="status-label">{{ "да" if q.is_required else "нет" }}</td>
         <td>
           <form method="post" action="/products/{{ product.id }}/questions/{{ q.id }}/delete" onsubmit="return confirm('Удалить вопрос?');" style="margin:0;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <button class="btn danger" type="submit" style="padding:6px 12px; font-size:12px;">Удалить</button>
           </form>
         </td>
@@ -61,6 +62,7 @@
   <div class="card" style="margin-top:24px; max-width:480px;">
     <div class="label" style="margin-bottom:12px;">Добавить вопрос</div>
     <form method="post" action="/products/{{ product.id }}/questions/new">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field">
         <div class="label">Текст вопроса — русский</div>
         <input type="text" name="question_text_ru" required placeholder="Например: Номер рейса и дата">

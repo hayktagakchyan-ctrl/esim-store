@@ -11,6 +11,7 @@
     {% elif expired %}
       <p class="error" style="text-align:center;">{{ t("verify_email_expired") }}</p>
       <form method="post" action="/shop/resend-verification" style="margin-top:16px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="hidden" name="email" value="{{ email }}">
         <input type="hidden" name="next" value="/shop/">
         <button class="btn secondary block" type="submit">{{ t("resend_verification") }}</button>

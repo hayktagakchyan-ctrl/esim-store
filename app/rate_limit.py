@@ -1,35 +1,53 @@
 """
-Простой rate limiter в памяти процесса — после нескольких неудачных попыток
-подряд по одному ключу (например IP+email) временно блокирует дальнейшие
-попытки. Не переживает перезапуск процесса и не общий между процессами
-(бот/админка/сайт у нас — три отдельных процесса) — цель не "идеальная защита
-от распределённого брутфорса", а просто не дать перебирать пароли в лоб
-простым скриптом по логину/паролю.
+Ограничение частоты попыток (вход, регистрация, сброс пароля и т.п.) —
+хранится в базе (RateLimitAttempt, см. database/models.py), а не в памяти
+процесса, как было раньше. Разница на практике: раньше перезапуск сервиса
+(обычное дело при каждом деплое) полностью сбрасывал счётчик неудачных
+попыток — то есть защита от перебора паролей переставала работать ровно
+в момент, когда деплоишь что-то ещё, и никак с этим не связанное. Плюс
+если Railway когда-нибудь запустит больше одной копии сервиса (реплики),
+у каждой была бы своя память — общего счётчика не было бы вообще. Теперь
+и то, и другое не проблема — все читают одну и ту же таблицу.
+
+Цель по-прежнему не "идеальная защита от распределённого брутфорса", а
+просто не дать перебирать пароли в лоб простым скриптом по логину/паролю.
 """
-import time
+import random
+from datetime import datetime, timedelta
+
+from sqlalchemy import select, func, delete
+
+from app.database.db import get_session
+from app.database.models import RateLimitAttempt
 
 MAX_ATTEMPTS = 5
 COOLDOWN_SECONDS = 5 * 60  # 5 минут
 
-_failed_attempts: dict[str, list[float]] = {}
+
+async def register_failure(key: str) -> None:
+    async with get_session() as session:
+        session.add(RateLimitAttempt(key=key))
+        await session.commit()
+        # Попутная уборка совсем старых записей — не архив, а короткий буфер.
+        # Не на каждый вызов (незачем лишний раз дёргать базу) — примерно раз
+        # на 20 попыток этого достаточно, чтобы таблица не росла бесконечно.
+        if random.random() < 0.05:
+            cutoff = datetime.utcnow() - timedelta(hours=1)
+            await session.execute(delete(RateLimitAttempt).where(RateLimitAttempt.created_at < cutoff))
+            await session.commit()
 
 
-def _recent(key: str) -> list[float]:
-    now = time.time()
-    attempts = [t for t in _failed_attempts.get(key, []) if now - t < COOLDOWN_SECONDS]
-    _failed_attempts[key] = attempts
-    return attempts
+async def is_blocked(key: str) -> bool:
+    cutoff = datetime.utcnow() - timedelta(seconds=COOLDOWN_SECONDS)
+    async with get_session() as session:
+        count = (await session.execute(
+            select(func.count()).select_from(RateLimitAttempt)
+            .where(RateLimitAttempt.key == key, RateLimitAttempt.created_at >= cutoff)
+        )).scalar_one()
+    return count >= MAX_ATTEMPTS
 
 
-def register_failure(key: str) -> None:
-    attempts = _recent(key)
-    attempts.append(time.time())
-    _failed_attempts[key] = attempts
-
-
-def is_blocked(key: str) -> bool:
-    return len(_recent(key)) >= MAX_ATTEMPTS
-
-
-def reset(key: str) -> None:
-    _failed_attempts.pop(key, None)
+async def reset(key: str) -> None:
+    async with get_session() as session:
+        await session.execute(delete(RateLimitAttempt).where(RateLimitAttempt.key == key))
+        await session.commit()

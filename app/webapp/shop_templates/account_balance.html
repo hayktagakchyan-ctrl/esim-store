@@ -15,6 +15,7 @@
     <div class="card">
       <h3 style="margin-top:0;">{{ t("balance_topup_title") }}</h3>
       <form method="post" action="/shop/account/balance/topup">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="field">
           <label for="amount">{{ t("balance_amount_label") }}</label>
           <input type="text" id="amount" name="amount" placeholder="10" required>
@@ -32,6 +33,7 @@
       {% if promo_success %}<p class="hint" style="color:#34C759;">+ ${{ "%.2f"|format(promo_success) }}</p>{% endif %}
       {% if promo_error %}<p class="error">{{ t(promo_error) }}</p>{% endif %}
       <form method="post" action="/shop/promo/redeem" style="display:flex; gap:8px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" style="flex:1; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
         <button class="btn" type="submit" style="white-space:nowrap;">{{ t("promo_redeem_btn") }}</button>
       </form>

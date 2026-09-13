@@ -88,6 +88,7 @@
       напрямую, готов ли eSIM, не дожидаясь вебхука.
     </p>
     <form method="post" action="/orders/{{ order.id }}/refresh-esimaccess">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <button class="btn" type="submit">🔄 Проверить у esimaccess</button>
     </form>
   </div>
@@ -96,7 +97,21 @@
   {% if order.status.value not in ["refunded"] %}
   <div class="card">
     <h3 style="margin-top:0;">Оформить возврат</h3>
+    {% if payment and payment.provider.value == "balance" %}
+    <p class="status-label" style="margin-bottom:12px;">
+      Заказ оплачен с внутреннего баланса — сумма будет возвращена на баланс клиента
+      автоматически, прямо здесь, без дополнительных действий.
+    </p>
+    {% elif payment %}
+    <p class="status-label" style="margin-bottom:12px;">
+      Заказ оплачен через {{ {"idram": "Idram", "oxapay": "OxaPay", "wallet_pay": "Wallet Pay", "stripe": "Stripe", "test": "тестовый платёж"}.get(payment.provider.value, payment.provider.value) }} —
+      деньги реально ушли клиенту через этого провайдера, поэтому сам возврат средств
+      нужно будет отдельно оформить в личном кабинете {{ {"idram": "Idram", "oxapay": "OxaPay", "wallet_pay": "Wallet Pay", "stripe": "Stripe", "test": "—"}.get(payment.provider.value, payment.provider.value) }}.
+      Эта кнопка только отметит заказ возвращённым у нас в учёте.
+    </p>
+    {% endif %}
     <form method="post" action="/orders/{{ order.id }}/refund">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       <div class="field">
         <textarea name="reason" rows="3" placeholder="Причина возврата (для истории)"></textarea>
       </div>

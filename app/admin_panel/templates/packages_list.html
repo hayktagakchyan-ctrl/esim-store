@@ -72,6 +72,7 @@
         <td>{{ "Да" if package.is_active else "Нет" }}</td>
         <td onclick="event.stopPropagation()">
           <form method="post" action="/orders/test-order" onsubmit="return confirm('Создать тестовый заказ и реально отправить его в esimaccess (спишет деньги с баланса)?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="hidden" name="package_id" value="{{ package.id }}">
             <button class="btn" type="submit" style="padding:4px 10px; font-size:12px;">🧪 Тест</button>
           </form>

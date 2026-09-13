@@ -8,6 +8,7 @@
     {% if product.response_time_text %}<p class="hint">{{ t("service_response_time_label") }}: {{ product.response_time_text }}</p>{% endif %}
 
     <form method="post" action="/shop/services/product/{{ product.id }}/request" enctype="multipart/form-data" class="card" style="margin-top:16px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% for q in questions %}
       <div class="field">
         <label style="display:block; font-weight:600; margin-bottom:8px;">

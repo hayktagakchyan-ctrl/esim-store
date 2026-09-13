@@ -14,6 +14,7 @@ from datetime import datetime
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select, func
@@ -60,6 +61,32 @@ app.add_middleware(
     https_only=settings.SECURE_COOKIES,
     same_site="lax",
 )
+
+
+@app.middleware("http")
+async def redirect_bot_paths_on_public_domain(request: Request, call_next):
+    """
+    На одном и том же процессе/порту живут и Mini App бота (смонтирован на "/"
+    через StaticFiles(html=True) — это отдаёт index.html бота на ЛЮБОЙ путь,
+    которого нет в других роутерах, включая просто "/"), и настоящий сайт
+    (/shop/*). Пока к приложению обращались только по адресу
+    webapp-production-...up.railway.app, это было не важно — этот адрес и
+    задуман как ссылка для Mini App бота (см. MINIAPP_URL).
+    Но как только подключили публичный домен kaline.am — тот же самый порт
+    стал вдруг открывать интерфейс бота вместо сайта на "www.kaline.am/", и
+    на любом другом незанятом пути тоже. Поэтому: на публичном домене — сразу
+    редиректим на /shop/, если путь не относится к самому сайту. На "родном"
+    railway.app-адресе поведение не меняется — Mini App бота продолжает
+    открываться там как раньше.
+    """
+    public_site_hosts = {"kaline.am", "www.kaline.am"}
+    site_path_prefixes = ("/shop", "/shop-static", "/support-chat", "/uploads", "/webhooks", "/favicon.ico")
+
+    host = (request.url.hostname or "").lower()
+    if host in public_site_hosts and not request.url.path.startswith(site_path_prefixes):
+        return RedirectResponse(url="/shop/")
+
+    return await call_next(request)
 
 
 @app.middleware("http")

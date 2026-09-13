@@ -86,13 +86,18 @@ body { transition: background-color 0.2s ease, color 0.2s ease; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-/* Мягкое появление карточек — ненавязчиво, коротко, не мешает пользоваться. */
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+/* Раньше тут была плавная анимация появления карточек при монтировании
+   (fade-up) — но приложение перерисовывает эти же самые контейнеры через
+   innerHTML на каждый опрос/обновление (чат каждые 3с, статус оплаты и т.д.),
+   а CSS-анимация запускается заново при КАЖДОЙ пересборке DOM-узла, даже если
+   содержимое не изменилось. Итог — там, где список обновляется часто, карточки
+   бесконечно "мигали"/дёргались заново, а не появлялись один раз, как
+   задумывалось. Поэтому анимацию появления убрали совсем — только hover/press
+   переходы ниже, они безопасны, потому что срабатывают лишь на реальное
+   изменение состояния, а не на пересборку разметки.
+   Свежий шрифт может показаться, что был просто "не такой яркий" эффект —
+   это осознанный компромисс, надёжность важнее декоративной мелочи. */
 .category-card, .package-row, .esim-card, .product-card, .row, .card {
-  animation: fade-up 0.35s ease both;
   transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
 }
 .package-row:active, .row:active { transform: scale(0.97); }

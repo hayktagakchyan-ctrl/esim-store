@@ -18,6 +18,8 @@
 <script>
 (function () {
   const conversationId = {{ conversation_id }};
+  const labelYou = {{ t("chat_label_you") | tojson }};
+  const labelSupport = {{ t("chat_label_support") | tojson }};
   const messagesEl = document.getElementById("chat-messages");
   const form = document.getElementById("chat-form");
   const input = document.getElementById("chat-input");
@@ -37,7 +39,8 @@
     }
     const textHtml = m.text ? `<div>${escapeHtml(m.text)}</div>` : "";
     const side = m.direction === "in" ? "mine" : "theirs";
-    return `<div class="bubble ${side}">${attachmentHtml}${textHtml}</div>`;
+    const senderLabel = m.direction === "in" ? labelYou : labelSupport;
+    return `<div class="bubble ${side}"><div class="bubble-sender">${senderLabel}</div>${attachmentHtml}${textHtml}</div>`;
   }
 
   async function loadMessages() {

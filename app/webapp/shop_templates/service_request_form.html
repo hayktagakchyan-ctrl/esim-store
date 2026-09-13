@@ -25,7 +25,7 @@
         </div>
         {% elif q.question_type.value == "text" %}
         <textarea name="answer_{{ q.id }}" rows="3" {{ 'required' if q.is_required }}
-                  style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:14px;"></textarea>
+                  style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:16px;"></textarea>
         {% else %}
         <input type="file" name="answer_file_{{ q.id }}" {{ 'required' if q.is_required }}>
         <p class="hint" style="margin-top:6px; font-size:12px;">{{ t("service_file_upload_hint") }}</p>
@@ -36,7 +36,7 @@
       <div class="field">
         <label style="display:block; font-weight:600; margin-bottom:8px;">{{ t("service_client_note_label") }}</label>
         <textarea name="client_note" rows="3"
-                  style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:14px;"></textarea>
+                  style="width:100%; padding:12px 14px; border-radius:12px; border:1px solid var(--border); background:var(--surface-secondary); color:var(--text); font-family:inherit; font-size:16px;"></textarea>
       </div>
 
       <button class="btn block" type="submit">{{ t("service_request_submit") }}</button>

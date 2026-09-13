@@ -177,6 +177,8 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
     "my_chats_empty": {"ru": "Пока нет ни одного чата.", "hy": "Դեռ ոչ մի չաթ չկա։", "en": "No chats yet."},
     "new_support_chat": {"ru": "🆘 Написать в поддержку", "hy": "🆘 Գրել աջակցությանը", "en": "🆘 Contact support"},
     "chat_input_placeholder": {"ru": "Напиши сообщение…", "hy": "Գրիր հաղորդագրություն…", "en": "Type a message…"},
+    "chat_label_you": {"ru": "Вы", "hy": "Դուք", "en": "You"},
+    "chat_label_support": {"ru": "Поддержка", "hy": "Աջակցություն", "en": "Support"},
     "topic_support": {"ru": "Поддержка", "hy": "Աջակցություն", "en": "Support"},
 
     "status_pending_payment": {"ru": "Ждёт оплаты", "hy": "Սպասում է վճարման", "en": "Awaiting payment"},

@@ -164,12 +164,13 @@ async function loadMessages() {
 function renderBubble(m) {
   let attachmentHtml = "";
   if (m.attachment_url && m.attachment_type === "photo") {
-    attachmentHtml = `<a href="${m.attachment_url}" target="_blank"><img class="chat-image" src="${m.attachment_url}"></a>`;
+    attachmentHtml = `<a href="${m.attachment_url}" target="_blank"><img class="chat-image" src="${m.attachment_url}" alt="Вложение"></a>`;
   } else if (m.attachment_url) {
     attachmentHtml = `<a class="chat-file" href="${m.attachment_url}" target="_blank">📎 ${escapeHtml(m.attachment_filename || "file")}</a>`;
   }
   const textHtml = m.text ? `<div>${escapeHtml(m.text)}</div>` : "";
-  return `<div class="bubble ${m.direction}">${attachmentHtml}${textHtml}</div>`;
+  const senderLabel = m.direction === "in" ? "Клиент" : "Вы";
+  return `<div class="bubble ${m.direction}"><div class="bubble-sender">${senderLabel}</div>${attachmentHtml}${textHtml}</div>`;
 }
 
 function escapeHtml(text) {

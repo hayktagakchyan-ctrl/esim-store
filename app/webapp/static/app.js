@@ -64,7 +64,7 @@ function escapeHtml(text) {
 
 // --- Навигация между экранами ---
 const screens = [
-  "home", "esim-countries", "esim-packages", "esim-checkout",
+  "home", "esim-countries", "esim-regions", "esim-packages", "esim-checkout",
   "products", "my-esims", "balance", "profile", "notifications", "chats", "chat",
 ];
 const TAB_ROOTS = { home: "home", "esim-countries": "browse", "my-esims": "my-esims", profile: "profile" };
@@ -88,6 +88,23 @@ function showScreen(name) {
   for (const s of screens) {
     document.getElementById(`screen-${s}`).hidden = s !== name;
   }
+
+  // Анимация появления — только для экрана, на который реально перешли, и
+  // только в момент самого перехода (см. объяснение в style.css у
+  // .screen-enter). classList.remove + принудительный reflow (обращение к
+  // offsetWidth) + classList.add — стандартный приём, чтобы анимация
+  // проигралась заново, даже если человек уже был на этом экране раньше и
+  // класс там уже остался с прошлого раза (без reflow браузер посчитал бы,
+  // что класс "не менялся", и просто не запустил бы анимацию повторно).
+  const activeScreenEl = document.getElementById(`screen-${name}`);
+  activeScreenEl.classList.remove("screen-enter");
+  void activeScreenEl.offsetWidth;
+  activeScreenEl.classList.add("screen-enter");
+
+  // Плавающая кнопка «открыть чат с поддержкой» нужна везде, КРОМЕ самого
+  // экрана чата — там уже есть собственная кнопка отправки сообщения, и без
+  // этой проверки плавающая кнопка накладывалась на неё, перекрывая тап.
+  document.getElementById("floating-chat-btn").hidden = name === "chat";
 
   const isTabRoot = name in TAB_ROOTS;
   document.getElementById("back-btn").hidden = isTabRoot;
@@ -117,7 +134,12 @@ function showScreen(name) {
 
 document.getElementById("back-btn").addEventListener("click", () => {
   if (!document.getElementById("screen-esim-checkout").hidden) return showScreen("esim-packages");
-  if (!document.getElementById("screen-esim-packages").hidden) return showScreen("esim-countries");
+  if (!document.getElementById("screen-esim-packages").hidden) {
+    // Пакет может быть открыт как со страны, так и с региона — возвращаемся
+    // туда, откуда реально пришли, а не всегда на список стран.
+    return showScreen(selectedCountry && selectedCountry.isRegion ? "esim-regions" : "esim-countries");
+  }
+  if (!document.getElementById("screen-esim-regions").hidden) return showScreen("esim-countries");
   if (!document.getElementById("screen-products").hidden) return showScreen("home");
   if (!document.getElementById("screen-balance").hidden) return showScreen("profile");
   if (!document.getElementById("screen-notifications").hidden) return showScreen("profile");
@@ -245,7 +267,7 @@ function renderRegionRow(r) {
     </div>
     <span class="chevron">›</span>
   `;
-  row.addEventListener("click", () => openCountry({ code: r.code, name: r.name }));
+  row.addEventListener("click", () => openCountry({ code: r.code, name: r.name, isRegion: true }));
   return row;
 }
 
@@ -253,16 +275,6 @@ function applyCountryListFilters() {
   const q = document.getElementById("search-input").value.trim().toLowerCase();
   const list = document.getElementById("country-list");
   list.innerHTML = "";
-
-  if (currentCountryFilter === "regions") {
-    const matches = allRegions.filter((r) => !q || r.name.toLowerCase().includes(q));
-    if (matches.length === 0) {
-      list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
-      return;
-    }
-    matches.forEach((r) => list.appendChild(renderRegionRow(r)));
-    return;
-  }
 
   const source = currentCountryFilter === "favorites"
     ? allCountries.filter((c) => favoriteCodes.includes(c.code))
@@ -273,6 +285,18 @@ function applyCountryListFilters() {
     return;
   }
   matches.forEach((c) => list.appendChild(renderCountryRow(c)));
+}
+
+function applyRegionFilter() {
+  const q = document.getElementById("region-search-input").value.trim().toLowerCase();
+  const list = document.getElementById("region-list");
+  list.innerHTML = "";
+  const matches = allRegions.filter((r) => !q || r.name.toLowerCase().includes(q));
+  if (matches.length === 0) {
+    list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
+    return;
+  }
+  matches.forEach((r) => list.appendChild(renderRegionRow(r)));
 }
 
 async function loadCountries() {
@@ -294,13 +318,23 @@ function setCountryFilter(filter) {
   currentCountryFilter = filter;
   document.getElementById("filter-all-btn").classList.toggle("active", filter === "all");
   document.getElementById("filter-favorites-btn").classList.toggle("active", filter === "favorites");
-  document.getElementById("filter-regions-btn").classList.toggle("active", filter === "regions");
   applyCountryListFilters();
 }
 
 document.getElementById("filter-all-btn").addEventListener("click", () => setCountryFilter("all"));
 document.getElementById("filter-favorites-btn").addEventListener("click", () => setCountryFilter("favorites"));
-document.getElementById("filter-regions-btn").addEventListener("click", () => setCountryFilter("regions"));
+
+document.getElementById("go-to-regions-btn").addEventListener("click", async () => {
+  if (allRegions.length === 0) {
+    try { allRegions = await api("/api/regions"); } catch (e) { allRegions = []; }
+  }
+  document.getElementById("region-search-input").value = "";
+  applyRegionFilter();
+  showScreen("esim-regions");
+});
+document.getElementById("region-search-input").addEventListener("input", () => {
+  applyRegionFilter();
+});
 
 document.getElementById("search-input").addEventListener("input", () => {
   applyCountryListFilters();

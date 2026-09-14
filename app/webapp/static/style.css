@@ -232,6 +232,25 @@ body::after { bottom: -160px; right: -120px; background: var(--glow-2); }
    от порядка правил в файле. */
 main.screen[hidden] { display: none !important; }
 
+/* Анимация появления экрана целиком — при переходе между вкладками/страницами
+   мини-аппа. Специально не вешаем анимацию на отдельные карточки/строки
+   списков (.row, .package-row и т.п.) — именно так было раньше, и именно
+   это ломалось: приложение то и дело перерисовывает списки через innerHTML
+   (например, после действия пользователя или на обновление чата), и CSS-
+   анимация запускается заново на каждой такой перерисовке, даже если
+   содержимое не поменялось — отсюда и "дёргание"/задваивание. Экран же
+   становится видимым только по явному переходу (showScreen в app.js), а не
+   на каждое обновление данных внутри него — значит анимировать сам факт
+   появления экрана безопасно и не может "задвоиться" на ровном месте. */
+@keyframes screen-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.screen.screen-enter { animation: screen-enter 0.28s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  .screen.screen-enter { animation: none; }
+}
+
 /* --- Поиск / инпуты в стиле iOS (капсула, заполненный серый фон) --- */
 .search, .field select {
   width: 100%;
@@ -614,6 +633,7 @@ main.screen[hidden] { display: none !important; }
    видна на главном экране, где идти назад некуда). */
 .icon-btn[hidden] { display: none !important; }
 .notif-badge[hidden] { display: none !important; }
+.floating-chat-btn[hidden] { display: none !important; }
 .onboarding-slide { max-width: 320px; }
 .onboarding-emoji { font-size: 64px; margin-bottom: 24px; }
 .onboarding-slide h2 { font-size: 22px; font-weight: 700; margin: 0 0 12px; }

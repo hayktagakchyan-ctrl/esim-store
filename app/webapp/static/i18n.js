@@ -12,6 +12,9 @@ const I18N = {
   back: { ru: "Назад", hy: "Հետ", en: "Back" },
 
   search_country_placeholder: { ru: "Поиск страны", hy: "Փնտրել երկիր", en: "Search country" },
+  search_region_placeholder: { ru: "Поиск региона", hy: "Փնտրել տարածաշրջան", en: "Search region" },
+  go_to_regions_title: { ru: "Региональные пакеты", hy: "Տարածաշրջանային փաթեթներ", en: "Regional bundles" },
+  go_to_regions_hint: { ru: "Несколько стран в одном пакете", hy: "Մի քանի երկիր մեկ փաթեթում", en: "Several countries in one bundle" },
   hero_kicker: { ru: "Твой цифровой роуминг", hy: "Քո թվային ռոումինգը", en: "Your digital roaming" },
   hero_title: { ru: "Путешествуй свободно", hy: "Ճամփորդիր ազատորեն", en: "Travel freely" },
   home_search_placeholder: { ru: "Куда вы отправляетесь?", hy: "Ո՞ւր եք մեկնում", en: "Where are you headed?" },

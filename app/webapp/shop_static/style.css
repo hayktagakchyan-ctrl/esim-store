@@ -367,6 +367,26 @@ h1, h2, h3, .section-title, .hero-v2 h1, .eyebrow-badge, .logo, .ghost-num,
 
 /* --- Универсальные карточка/строка/список --- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); margin-bottom: 16px; }
+
+/* Плавное появление при загрузке страницы — сайт рендерится сервером на
+   каждый переход (обычная ссылка, полная загрузка страницы), поэтому тут,
+   в отличие от мини-аппа бота (одностраничное приложение, которое иногда
+   перерисовывает один и тот же список через innerHTML), нет риска, что
+   анимация будет запускаться повторно на одном и том же месте — DOM тут
+   реально создаётся заново при каждой загрузке. Только не вешаем это на
+   .row/.country-tile — их JS прячет/показывает через hidden при поиске на
+   каталоге (см. catalog.html), и анимация могла бы дёргаться при каждой
+   букве, которую печатает человек. */
+@keyframes fade-up-page {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.card, .feature-card, .plan-card, .category-card {
+  animation: fade-up-page 0.4s ease both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .card, .feature-card, .plan-card, .category-card { animation: none; }
+}
 .list { display: flex; flex-direction: column; }
 .row {
   display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 20px;

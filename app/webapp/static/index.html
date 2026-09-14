@@ -6,7 +6,7 @@
   <title>KaLine</title>
   <link rel="icon" type="image/png" href="/img/favicon.png">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
-  <link rel="stylesheet" href="/style.css?v=19">
+  <link rel="stylesheet" href="/style.css?v=21">
 </head>
 <body>
   <div id="onboarding-overlay" class="onboarding-overlay" hidden>
@@ -104,9 +104,25 @@
       <div class="promo-strip" style="margin-bottom:10px;">
         <button id="filter-all-btn" class="promo-pill active" type="button" data-i18n="filter_all"></button>
         <button id="filter-favorites-btn" class="promo-pill" type="button" data-i18n="filter_favorites"></button>
-        <button id="filter-regions-btn" class="promo-pill" type="button" data-i18n="filter_regions"></button>
       </div>
+      <button id="go-to-regions-btn" class="row" type="button" style="width:100%; margin-bottom:12px; cursor:pointer; border:1px solid var(--border); background:var(--surface); font-family:inherit;">
+        <span class="quick-action-icon qa-green" style="flex-shrink:0;"><span class="icon-mask icon-globe"></span></span>
+        <div class="main" style="text-align:left;">
+          <div class="title" data-i18n="go_to_regions_title"></div>
+          <div class="hint" data-i18n="go_to_regions_hint"></div>
+        </div>
+        <span class="chevron">›</span>
+      </button>
       <div id="country-list" class="list"></div>
+    </main>
+
+    <!-- eSIM: региональные пакеты (несколько стран в одном пакете) — отдельный
+         экран со своим поиском, а не просто фильтр внутри общего списка стран:
+         тут другая логика ("несколько стран сразу"), и раньше было не очень
+         заметно, что вообще есть такой вариант. -->
+    <main id="screen-esim-regions" class="screen" hidden>
+      <input id="region-search-input" class="search" type="text" data-i18n-placeholder="search_region_placeholder">
+      <div id="region-list" class="list"></div>
     </main>
 
     <!-- eSIM: пакеты -->
@@ -268,7 +284,7 @@
   <!-- ?v=2 — версия статики. Telegram иногда держит JS/CSS в дисковом кэше даже после
        полного перезапуска приложения; при каждом обновлении app.js/i18n.js/style.css
        увеличивай это число — иначе клиент может продолжать использовать старую версию. -->
-  <script src="/i18n.js?v=9"></script>
-  <script src="/app.js?v=10"></script>
+  <script src="/i18n.js?v=10"></script>
+  <script src="/app.js?v=12"></script>
 </body>
 </html>

@@ -23,7 +23,7 @@
       {% if promo_error %}<p class="error">{{ t(promo_error) }}</p>{% endif %}
       <form method="post" action="/shop/checkout/{{ package.id }}/promo" style="display:flex; gap:8px;">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" class="field" style="flex:1; margin:0;">
+        <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" class="field" style="flex:1; min-width:0; margin:0;">
         <button class="btn secondary" type="submit" style="white-space:nowrap;">{{ t("promo_redeem_btn") }}</button>
       </form>
     </div>

@@ -1087,6 +1087,26 @@ async def bot_user_balance_update(
     return RedirectResponse(url=f"/users?q={q}", status_code=302)
 
 
+@app.post("/users/bot/{user_id}/balance/add")
+async def bot_user_balance_add(
+    request: Request, user_id: int, amount: float = Form(...), _=Depends(require_full_admin)
+):
+    """
+    Отдельно от bot_user_balance_update выше: то поле выставляет баланс РОВНО
+    в указанное число (оно и было причиной путаницы — предзаполнено текущим
+    значением, легко перепутать с "прибавить"). Это — однозначно прибавляет
+    сумму к тому, что уже есть, плюс можно вписать отрицательное число, чтобы
+    списать.
+    """
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is not None:
+            user.balance = round(user.balance + amount, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
 @app.post("/users/site/{account_id}/balance")
 async def site_account_balance_update(
     request: Request, account_id: int, balance: float = Form(...), _=Depends(require_full_admin)
@@ -1095,6 +1115,20 @@ async def site_account_balance_update(
         account = await session.get(WebsiteAccount, account_id)
         if account is not None:
             account.balance = round(balance, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
+@app.post("/users/site/{account_id}/balance/add")
+async def site_account_balance_add(
+    request: Request, account_id: int, amount: float = Form(...), _=Depends(require_full_admin)
+):
+    """См. bot_user_balance_add выше — тот же принцип, для аккаунтов сайта."""
+    async with get_session() as session:
+        account = await session.get(WebsiteAccount, account_id)
+        if account is not None:
+            account.balance = round(account.balance + amount, 2)
             await session.commit()
     q = request.query_params.get("q", "")
     return RedirectResponse(url=f"/users?q={q}", status_code=302)
@@ -1295,9 +1329,26 @@ async def service_request_cancel(request_id: int, admin_note: str = Form(""), _=
         sr = await session.get(ServiceRequest, request_id)
         if sr is None:
             raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["product"])
         sr.status = ServiceRequestStatus.CANCELLED
         sr.admin_note = admin_note.strip() or sr.admin_note
         await session.commit()
+
+        # Раньше клиент никак не узнавал, что заявку отклонили, и тем более —
+        # почему (форма отклонения даже не спрашивала причину). Теперь причина
+        # обязательна на уровне формы (см. шаблон) и уходит клиенту уведомлением,
+        # плюс видна прямо в деталях заявки (та же логика, что и раньше для
+        # готовой/оплаченной — см. shop.py/products.py: admin_note виден клиенту
+        # при paid ИЛИ cancelled, а не только при paid).
+        await notify(
+            session, website_account_id=sr.website_account_id, user_id=sr.user_id,
+            type=NotificationType.ORDER,
+            title="Заявка отклонена",
+            body=f"«{sr.product.title('ru')}» отклонена."
+                 + (f" Причина: {sr.admin_note}" if sr.admin_note else " Причина не указана — уточни в поддержке."),
+            link_url=f"/shop/account/service-requests/{sr.id}",
+        )
+
     return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
 
 

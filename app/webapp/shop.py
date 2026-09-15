@@ -726,6 +726,7 @@ async def service_request_detail(request: Request, request_id: int):
         lang = get_lang(request)
         await session.refresh(sr, attribute_names=["product"])
         is_paid = sr.status == ServiceRequestStatus.PAID
+        is_cancelled = sr.status == ServiceRequestStatus.CANCELLED
         return await render(
             request, "service_request_detail.html",
             sr={
@@ -734,9 +735,12 @@ async def service_request_detail(request: Request, request_id: int):
                 "currency": sr.currency,
                 "response_time_text": sr.product.response_time_text,
                 "client_note": sr.client_note,
-                # Ответ и файл админа видны клиенту ТОЛЬКО после оплаты — до этого
-                # видно только "готово к оплате" и цену, без содержимого ответа.
-                "admin_note": sr.admin_note if is_paid else None,
+                # Ответ админа виден клиенту после оплаты (та же логика, что раньше)
+                # ИЛИ при отклонении — это единственный способ узнать причину отказа,
+                # раньше клиент вообще не видел admin_note для отклонённой заявки.
+                # Файл (deliverable) — только после оплаты, отклонённой заявке он
+                # не полагается ни при каких условиях.
+                "admin_note": sr.admin_note if (is_paid or is_cancelled) else None,
                 "deliverable_path": sr.deliverable_path if is_paid else None,
                 "deliverable_filename": sr.deliverable_filename if is_paid else None,
                 "answers": [{"question_text": a.text(lang), "question_type": a.question_type.value,

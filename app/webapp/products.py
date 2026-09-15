@@ -189,14 +189,15 @@ async def service_request_detail(request_id: int, lang: str = "ru", user: User =
         sr = _service_request_owned_by(await session.get(ServiceRequest, request_id), user)
         await session.refresh(sr, attribute_names=["answers", "product"])
         is_paid = sr.status == ServiceRequestStatus.PAID
+        is_cancelled = sr.status == ServiceRequestStatus.CANCELLED
         return {
             "id": sr.id, "status": sr.status.value, "product_title": sr.product.title(lang),
             "final_price": float(sr.final_price) if sr.final_price is not None else None,
             "currency": sr.currency, "response_time_text": sr.product.response_time_text,
             "client_note": sr.client_note,
-            # Ответ и файл админа видны клиенту ТОЛЬКО после оплаты — то же
-            # правило, что и на сайте (см. shop.py service_request_detail).
-            "admin_note": sr.admin_note if is_paid else None,
+            # Причина отказа (или комментарий после оплаты) — та же логика, что
+            # на сайте: admin_note виден при paid ИЛИ cancelled, файл — только paid.
+            "admin_note": sr.admin_note if (is_paid or is_cancelled) else None,
             "deliverable_path": sr.deliverable_path if is_paid else None,
             "deliverable_filename": sr.deliverable_filename if is_paid else None,
             "answers": [

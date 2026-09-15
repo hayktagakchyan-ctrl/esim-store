@@ -73,8 +73,13 @@
   </div>
 
   <div class="card" style="max-width:480px;">
+    <h3 style="margin-top:0;">Отклонить заявку</h3>
     <form method="post" action="/service-requests/{{ sr.id }}/cancel" onsubmit="return confirm('Отклонить заявку?');">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <div class="label">Причина (клиент увидит это)</div>
+        <textarea name="admin_note" rows="3" required placeholder="Например: скан билета нечитаемый, пришли фото почётче"></textarea>
+      </div>
       <button class="btn danger" type="submit">Отклонить заявку</button>
     </form>
   </div>

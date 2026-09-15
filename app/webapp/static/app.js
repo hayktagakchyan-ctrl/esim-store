@@ -897,9 +897,9 @@ async function openServiceRequestDetail(id) {
     payBlock = `<button class="primary-btn" id="sr-pay-btn">${t("service_pay_balance_button")} — $${sr.final_price.toFixed(2)}</button>`;
   }
   let deliverableBlock = "";
-  if (sr.status === "paid") {
-    if (sr.admin_note) deliverableBlock += `<div class="field"><label>${t("service_admin_note")}</label><div>${escapeHtml(sr.admin_note)}</div></div>`;
-    if (sr.deliverable_path) deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" target="_blank" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
+  if (sr.admin_note) deliverableBlock += `<div class="field"><label>${t("service_admin_note")}</label><div>${escapeHtml(sr.admin_note)}</div></div>`;
+  if (sr.status === "paid" && sr.deliverable_path) {
+    deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" target="_blank" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
   }
 
   el.innerHTML = `

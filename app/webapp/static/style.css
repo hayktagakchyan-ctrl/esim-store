@@ -602,7 +602,7 @@ button.row { color: inherit; font-family: inherit; text-align: left; width: 100%
 .quick-actions { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
 .quick-action-btn {
   display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 10px;
-  height: 90px; padding: 12px;
+  min-height: 90px; padding: 12px;
   background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
   color: var(--text); font-size: 11px; font-weight: 600;
   cursor: pointer;

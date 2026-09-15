@@ -904,7 +904,7 @@ async function openServiceRequestDetail(id) {
     if (isImage) {
       deliverableBlock += `<img src="${sr.deliverable_path}" alt="${escapeHtml(sr.deliverable_filename)}" style="max-width:100%; border-radius:12px; margin-bottom:12px; display:block;">`;
     }
-    deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" download="${escapeHtml(sr.deliverable_filename || "")}" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
+    deliverableBlock += `<button class="primary-btn" id="sr-download-btn" data-src="${sr.deliverable_path}" data-name="${escapeHtml(sr.deliverable_filename || "file")}" style="display:block; width:100%; text-align:center;">${t("service_download_button")}</button>`;
   }
 
   el.innerHTML = `
@@ -927,6 +927,31 @@ async function openServiceRequestDetail(id) {
         await openServiceRequestDetail(id);
       } catch (err) {
         alert(t("service_insufficient_balance"));
+      }
+    });
+  }
+  const downloadBtn = document.getElementById("sr-download-btn");
+  if (downloadBtn) {
+    // Обычная ссылка со скачиванием (<a download>) внутри Mini App Telegram
+    // ненадёжна — WebView её часто просто не обрабатывает, ничего не
+    // происходит по клику. Тот же приём, что уже работает для QR-кода eSIM
+    // (см. qr-download-btn выше): сначала пробуем скачать как blob, если не
+    // получилось — открываем через tg.openLink (собственный метод Telegram).
+    downloadBtn.addEventListener("click", async () => {
+      const src = downloadBtn.dataset.src;
+      try {
+        const resp = await fetch(src);
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = downloadBtn.dataset.name;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(blobUrl);
+      } catch (e) {
+        tg.openLink(src);
       }
     });
   }

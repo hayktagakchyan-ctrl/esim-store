@@ -80,7 +80,7 @@ const I18N = {
   tab_profile: { ru: "Профиль", hy: "Պրոֆիլ", en: "Profile" },
 
   quick_buy_esim: { ru: "Купить eSIM", hy: "Գնել eSIM", en: "Buy eSIM" },
-  quick_my_esims: { ru: "Мои eSIM", hy: "Իմ eSIM-երը", en: "My eSIMs" },
+  quick_my_esims: { ru: "Мои eSIM", hy: "Իմ eSIM", en: "My eSIMs" },
   quick_favorites: { ru: "Избранное", hy: "Ընտրյալներ", en: "Favorites" },
   quick_topup: { ru: "Пополнить", hy: "Համալրել", en: "Top up" },
 

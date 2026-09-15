@@ -74,4 +74,6 @@ async def _save_to(file: UploadFile, target_dir: Path, url_prefix: str) -> dict:
         "type": attachment_type,
         "filename": original_name,
         "disk_path": disk_path,
+        "data": contents,
+        "content_type": file.content_type or "application/octet-stream",
     }

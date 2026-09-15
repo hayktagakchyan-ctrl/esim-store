@@ -15,6 +15,7 @@ _fulfill_order() ниже — она создаёт заказ у esimaccess (cr
 пока нужно наполнять вручную через админку (см. esimaccess_package_code у Package).
 """
 import logging
+import secrets
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Header, Request

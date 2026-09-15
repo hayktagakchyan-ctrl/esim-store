@@ -47,6 +47,10 @@
     </div>
     {% elif sr.status == "paid" and sr.deliverable_path %}
     <div class="card" style="text-align:center;">
+      {% set ext = sr.deliverable_filename.rsplit(".", 1)[-1].lower() if sr.deliverable_filename else "" %}
+      {% if ext in ["jpg", "jpeg", "png", "webp", "gif"] %}
+      <img src="{{ sr.deliverable_path }}" alt="{{ sr.deliverable_filename }}" style="max-width:100%; border-radius:12px; margin-bottom:16px;">
+      {% endif %}
       <a class="btn block" href="{{ sr.deliverable_path }}" download="{{ sr.deliverable_filename }}">{{ t("service_download_button") }}</a>
     </div>
     {% elif sr.status == "submitted" %}

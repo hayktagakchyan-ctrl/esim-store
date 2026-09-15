@@ -7,7 +7,8 @@ from datetime import datetime
 import enum
 
 from sqlalchemy import (
-    BigInteger, String, Integer, Numeric, DateTime, ForeignKey, Text, Enum, JSON, Boolean, UniqueConstraint
+    BigInteger, String, Integer, Numeric, DateTime, ForeignKey, Text, Enum, JSON, Boolean, UniqueConstraint,
+    LargeBinary,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -392,6 +393,11 @@ class ServiceRequest(Base):
 
     deliverable_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     deliverable_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Сами байты файла и его MIME-тип — см. подробное объяснение в
+    # db.py::_run_light_migrations (искать "deliverable_data"): почему файл
+    # нельзя было просто хранить на диске того сервиса, который его принял.
+    deliverable_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    deliverable_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     admin_note: Mapped[str | None] = mapped_column(Text, nullable=True)  # виден клиенту, необязателен
     # Свободный комментарий от самого клиента — поле всегда есть в форме, даже
@@ -431,6 +437,8 @@ class ServiceRequestAnswer(Base):
     answer_bool: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     answer_file_path: Mapped[str | None] = mapped_column(String(512), nullable=True)
     answer_file_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    answer_file_data: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    answer_file_content_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
 
     service_request: Mapped["ServiceRequest"] = relationship(back_populates="answers")
 

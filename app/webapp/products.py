@@ -147,6 +147,8 @@ async def create_service_request(request: Request, user: User = Depends(get_curr
                     saved = await save_service_file(upload, sr.id)
                     answer.answer_file_path = saved["url"]
                     answer.answer_file_filename = saved["filename"]
+                    answer.answer_file_data = saved["data"]
+                    answer.answer_file_content_type = saved["content_type"]
                 elif q.is_required:
                     raise HTTPException(status_code=400, detail=f"Прикрепите файл: {q.text(lang)}")
             session.add(answer)

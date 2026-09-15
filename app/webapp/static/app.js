@@ -267,8 +267,8 @@ function renderRegionRow(r) {
     <span class="flag">🌐</span>
     <div class="main">
       <div class="title">${escapeHtml(r.name)}</div>
-      <div class="hint">${t("region_from")} $${r.from_price.toFixed(2)}</div>
     </div>
+    <span class="meta">${t("region_from")} $${r.from_price.toFixed(2)}</span>
     <span class="chevron">›</span>
   `;
   row.addEventListener("click", () => openCountry({ code: r.code, name: r.name, isRegion: true }));
@@ -899,7 +899,12 @@ async function openServiceRequestDetail(id) {
   let deliverableBlock = "";
   if (sr.admin_note) deliverableBlock += `<div class="field"><label>${t("service_admin_note")}</label><div>${escapeHtml(sr.admin_note)}</div></div>`;
   if (sr.status === "paid" && sr.deliverable_path) {
-    deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" target="_blank" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
+    const ext = (sr.deliverable_filename || "").split(".").pop().toLowerCase();
+    const isImage = ["jpg", "jpeg", "png", "webp", "gif"].includes(ext);
+    if (isImage) {
+      deliverableBlock += `<img src="${sr.deliverable_path}" alt="${escapeHtml(sr.deliverable_filename)}" style="max-width:100%; border-radius:12px; margin-bottom:12px; display:block;">`;
+    }
+    deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" download="${escapeHtml(sr.deliverable_filename || "")}" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
   }
 
   el.innerHTML = `

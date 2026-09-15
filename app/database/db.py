@@ -113,6 +113,22 @@ async def _run_light_migrations(conn) -> None:
     # Срок ответа по услуге (Product) и комментарий клиента (ServiceRequest) —
     # добавлены позже, тоже просто новые nullable-колонки в уже существующих таблицах.
     await conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS response_time_text VARCHAR(255)"))
+
+    # deliverable_data / answer_file_data: раньше файлы заявок на услуги (и
+    # вложения ответов клиента, и ваучер, который прикладывает админ) хранились
+    # ТОЛЬКО на локальном диске того процесса, который их принял (см. uploads.py
+    # save_service_file). Проблема, которую поймали в проде: сайт/бот (сервис
+    # "webapp") и админка (сервис "Admin") — это ДВА РАЗНЫХ развёрнутых на
+    # Railway контейнера с отдельными, изолированными дисками. Если файл
+    # загружает админ через админку, он физически лежит на диске контейнера
+    # админки — а отдаёт файлы клиенту сервис "webapp", у которого такого
+    # файла на диске просто нет (отсюда "файл не открывается, ошибка").
+    # Общий для всех трёх сервисов ресурс — только база данных, поэтому байты
+    # файла теперь хранятся прямо в ней, а не на диске конкретного контейнера.
+    await conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS deliverable_data BYTEA"))
+    await conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS deliverable_content_type VARCHAR(100)"))
+    await conn.execute(text("ALTER TABLE service_request_answers ADD COLUMN IF NOT EXISTS answer_file_data BYTEA"))
+    await conn.execute(text("ALTER TABLE service_request_answers ADD COLUMN IF NOT EXISTS answer_file_content_type VARCHAR(100)"))
     await conn.execute(text("ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS client_note TEXT"))
 
 

@@ -14,7 +14,7 @@ from datetime import datetime
 import uuid
 
 from fastapi import FastAPI, HTTPException, Depends, Request
-from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.responses import RedirectResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
@@ -27,7 +27,7 @@ from app.database.db import get_session, init_db
 logging.basicConfig(level=logging.INFO)
 from app.database.models import (
     Package, User, Order, OrderStatus, Favorite, Review, TopUp, PaymentProvider, PaymentStatus,
-    Notification, NotificationType, PromoCode, PromoCodeRedemption,
+    Notification, NotificationType, PromoCode, PromoCodeRedemption, ServiceRequest, ServiceRequestAnswer,
 )
 from app.webapp.auth import get_current_user
 from app.webapp import webhooks, payments, products, conversations, admin_chat, shop
@@ -190,6 +190,7 @@ async def friendly_error_page(request: Request, exc: StarletteHTTPException):
 
 
 app.include_router(webhooks.router)
+app.include_router(payments.router)
 app.include_router(products.router)
 app.include_router(conversations.router)
 app.include_router(admin_chat.router)
@@ -425,27 +426,37 @@ async def submit_review(order_id: int, body: ReviewRequest, user: User = Depends
     return {"ok": True}
 
 
-# Статика инбокса чатов для админа — регистрируется ДО общего "/", иначе тот
-# перехватит эти пути первым (он ловит вообще всё).
-app.mount(
-    "/support-chat", StaticFiles(directory=BASE_DIR / "support_chat_static", html=True), name="support_chat_static"
-)
+@app.get("/uploads/service_requests/{sr_id}/{filename}")
+async def serve_service_request_file(sr_id: int, filename: str):
+    """
+    Файлы заявок на услуги (и ваучер от админа, и вложение-ответ клиента)
+    отдаём из базы, а не с диска — см. подробное объяснение в
+    database/db.py::_run_light_migrations (искать "deliverable_data"): админка
+    и этот сервис (сайт+бот) — два РАЗНЫХ развёрнутых контейнера с отдельными
+    дисками, файл с диска одного не виден другому. Общий ресурс — только база.
+    ВАЖНО: этот роут обязан стоять РАНЬШЕ app.mount("/uploads", ...) ниже —
+    та же причина, что и с /api/promo/redeem раньше (см. комментарий там):
+    иначе мимо этой проверки все запросы уходили бы прямо в StaticFiles и
+    просто не находили файл на диске (404), даже не долетая досюда.
+    Путь специально совпадает 1-в-1 с тем, что уже лежит в deliverable_path /
+    answer_file_path (см. uploads.py) — благодаря этому ничего не пришлось
+    менять в местах, которые эти пути генерируют.
+    """
+    full_path = f"/uploads/service_requests/{sr_id}/{filename}"
+    async with get_session() as session:
+        sr = (await session.execute(
+            select(ServiceRequest).where(ServiceRequest.deliverable_path == full_path)
+        )).scalar_one_or_none()
+        if sr is not None and sr.deliverable_data:
+            return Response(content=sr.deliverable_data, media_type=sr.deliverable_content_type or "application/octet-stream")
 
-# Загруженные в чатах фото/файлы — раздаём статикой, чтобы <img>/<a href> в обоих
-# Mini App работали напрямую. Папку создаём программно (mkdir), а не полагаемся,
-# что она уже есть на диске, — пустые папки часто теряются при копировании файлов
-# по отдельности (именно так это и сломалось один раз).
-UPLOADS_DIR = BASE_DIR / "uploads"
-UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+        answer = (await session.execute(
+            select(ServiceRequestAnswer).where(ServiceRequestAnswer.answer_file_path == full_path)
+        )).scalar_one_or_none()
+        if answer is not None and answer.answer_file_data:
+            return Response(content=answer.answer_file_data, media_type=answer.answer_file_content_type or "application/octet-stream")
 
-app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
-
-# Стили публичного сайта (app/webapp/shop.py) — тоже до catch-all "/".
-app.mount("/shop-static", StaticFiles(directory=BASE_DIR / "shop_static"), name="shop_static")
-
-# Статика клиентского магазина (index.html/app.js/style.css) — подключается ПОСЛЕДНЕЙ,
-# чтобы не перехватывать запросы к /api/* и /support-chat/*.
-app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")
+    raise HTTPException(status_code=404, detail="Файл не найден")
 
 
 # --- Уведомления ---
@@ -525,3 +536,28 @@ async def redeem_promo(body: PromoRedeemRequest, user: User = Depends(get_curren
         )
 
     return {"bonus_amount": promo.bonus_amount}
+
+
+# Статика инбокса чатов для админа — регистрируется ДО общего "/", иначе тот
+# перехватит эти пути первым (он ловит вообще всё).
+app.mount(
+    "/support-chat", StaticFiles(directory=BASE_DIR / "support_chat_static", html=True), name="support_chat_static"
+)
+
+# Загруженные в чатах фото/файлы — раздаём статикой, чтобы <img>/<a href> в обоих
+# Mini App работали напрямую. Папку создаём программно (mkdir), а не полагаемся,
+# что она уже есть на диске, — пустые папки часто теряются при копировании файлов
+# по отдельности (именно так это и сломалось один раз).
+UPLOADS_DIR = BASE_DIR / "uploads"
+UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
+
+app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
+# Стили публичного сайта (app/webapp/shop.py) — тоже до catch-all "/".
+app.mount("/shop-static", StaticFiles(directory=BASE_DIR / "shop_static"), name="shop_static")
+
+# Статика клиентского магазина (index.html/app.js/style.css) — подключается ПОСЛЕДНЕЙ,
+# чтобы не перехватывать запросы к /api/* и /support-chat/*.
+app.mount("/", StaticFiles(directory=BASE_DIR / "static", html=True), name="static")
+
+

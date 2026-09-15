@@ -5,6 +5,31 @@
    Сайдбар — отдельный компонент в том же визуальном языке, которого в
    макете не было (там был верхний navbar). */
 
+@font-face {
+    font-family: "Noto Sans Armenian";
+    src: url("/shop-static/fonts/noto-sans-armenian-armenian-400-normal.woff2") format("woff2");
+    font-weight: 400; font-style: normal; font-display: swap;
+    unicode-range: U+0530-058F, U+FB13-FB17; /* только армянский блок — латиницу закрывают системные шрифты */
+  }
+  @font-face {
+    font-family: "Noto Sans Armenian";
+    src: url("/shop-static/fonts/noto-sans-armenian-armenian-500-normal.woff2") format("woff2");
+    font-weight: 500; font-style: normal; font-display: swap;
+    unicode-range: U+0530-058F, U+FB13-FB17;
+  }
+  @font-face {
+    font-family: "Noto Sans Armenian";
+    src: url("/shop-static/fonts/noto-sans-armenian-armenian-600-normal.woff2") format("woff2");
+    font-weight: 600; font-style: normal; font-display: swap;
+    unicode-range: U+0530-058F, U+FB13-FB17;
+  }
+  @font-face {
+    font-family: "Noto Sans Armenian";
+    src: url("/shop-static/fonts/noto-sans-armenian-armenian-700-normal.woff2") format("woff2");
+    font-weight: 700; font-style: normal; font-display: swap;
+    unicode-range: U+0530-058F, U+FB13-FB17;
+  }
+
 :root {
   --bg: #F6F7F9;
   --surface: #FFFFFF;
@@ -38,16 +63,16 @@
   /* Раньше тут были Unbounded/Geist/Noto Sans Armenian с Google Fonts CDN —
      убрали: загрузка шрифтов с fonts.googleapis.com передаёт IP посетителя
      Google без согласия, это отдельный, хорошо задокументированный риск по
-     GDPR (в Германии по этому поводу были реальные судебные иски и массовые
-     письма-претензии владельцам сайтов). Системные шрифты — без обращения
-     к третьим лицам вообще, риска нет. Армянский текст отрисуется системным
-     шрифтом ОС — на современных Windows/macOS/iOS/Android он у армянского
-     алфавита в целом приличный, просто не настолько стилизованный.
-     Если захочешь вернуть точно Unbounded/Geist — можно самостоятельно
-     разместить файлы шрифтов у себя на сервере (не через Google CDN),
-     тогда риска не будет и внешний вид сохранится. */
-  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+     GDPR. Системные шрифты закрывают латиницу без проблем — но выяснилось,
+     что системный шрифт не у всех устройств прилично рисует армянские буквы
+     (некоторые сочетания реально превращались в нечитаемую кашу). Поэтому
+     армянский шрифт вернули — но не через Google CDN, а файлами прямо у
+     себя на сервере (см. /shop-static/fonts/, лицензия OFL — свободно
+     распространяется). Риска на приватность это уже не создаёт, потому что
+     запрос идёт к нашему собственному серверу, а не к Google. */
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans Armenian", sans-serif;
+
 }
 
 [data-theme="dark"] {

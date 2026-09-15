@@ -42,7 +42,7 @@
         {% elif a.question_type.value == "text" %}
           {{ a.answer_text or "—" }}
         {% else %}
-          {% if a.answer_file_path %}<a href="{{ a.answer_file_path }}" target="_blank">📎 {{ a.answer_file_filename }}</a>{% else %}—{% endif %}
+          {% if a.answer_file_path %}<a href="{{ public_base_url }}{{ a.answer_file_path }}" target="_blank">📎 {{ a.answer_file_filename }}</a>{% else %}—{% endif %}
         {% endif %}
       </div>
     </div>
@@ -87,7 +87,7 @@
   {% elif sr.status.value == "ready" %}
   <div class="card">
     <div class="field"><div class="label">Цена</div><div class="value">{{ sr.final_price }} {{ sr.currency }}</div></div>
-    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
+    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ public_base_url }}{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
     {% if sr.admin_note %}<div class="field"><div class="label">Комментарий</div><div class="value">{{ sr.admin_note }}</div></div>{% endif %}
     <p class="status-label">Ждём оплаты с баланса клиентом.</p>
   </div>
@@ -95,7 +95,7 @@
   {% elif sr.status.value == "paid" %}
   <div class="card">
     <div class="field"><div class="label">Оплачено</div><div class="value">{{ sr.final_price }} {{ sr.currency }} · {{ sr.paid_at.strftime("%d.%m.%Y %H:%M") if sr.paid_at else "—" }}</div></div>
-    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
+    {% if sr.deliverable_filename %}<div class="field"><div class="label">Файл</div><div class="value"><a href="{{ public_base_url }}{{ sr.deliverable_path }}" target="_blank">📎 {{ sr.deliverable_filename }}</a></div></div>{% endif %}
   </div>
 
   {% elif sr.status.value == "cancelled" %}

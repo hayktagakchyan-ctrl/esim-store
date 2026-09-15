@@ -92,6 +92,12 @@ def _admin_template_context(request: Request) -> dict:
         "is_full_admin": request.session.get("admin_role", AdminRole.FULL.value) == AdminRole.FULL.value,
         "admin_login": request.session.get("admin_login", settings.ADMIN_PANEL_LOGIN),
         "csrf_token": get_or_create_csrf_token(request),
+        # Файлы заявок (ваучер админа, вложение клиента) отдаёт сервис сайта/бота,
+        # а не сама админка (это два разных развёрнутых сервиса на Railway) —
+        # поэтому ссылки на них в шаблонах должны быть абсолютными, не просто
+        # "/uploads/...", иначе браузер попробует открыть их на домене САМОЙ
+        # админки, где такого пути не существует.
+        "public_base_url": settings.PUBLIC_BASE_URL.rstrip("/"),
     }
 
 
@@ -1305,6 +1311,11 @@ async def service_request_mark_ready(
             saved = await save_service_file(deliverable, sr.id)
             sr.deliverable_path = saved["url"]
             sr.deliverable_filename = saved["filename"]
+            # Байты — в базу, а не только на локальный диск: этот процесс
+            # (админка) и тот, что реально отдаёт файл клиенту (сайт/бот) —
+            # два разных контейнера на Railway с разными дисками.
+            sr.deliverable_data = saved["data"]
+            sr.deliverable_content_type = saved["content_type"]
 
         sr.final_price = final_price
         sr.admin_note = admin_note.strip() or None

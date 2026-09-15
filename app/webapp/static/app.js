@@ -937,22 +937,17 @@ async function openServiceRequestDetail(id) {
     // происходит по клику. Тот же приём, что уже работает для QR-кода eSIM
     // (см. qr-download-btn выше): сначала пробуем скачать как blob, если не
     // получилось — открываем через tg.openLink (собственный метод Telegram).
-    downloadBtn.addEventListener("click", async () => {
+    downloadBtn.addEventListener("click", () => {
       const src = downloadBtn.dataset.src;
-      try {
-        const resp = await fetch(src);
-        const blob = await resp.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = blobUrl;
-        a.download = downloadBtn.dataset.name;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(blobUrl);
-      } catch (e) {
-        tg.openLink(src);
-      }
+      // Сразу через родной метод Telegram, без попытки скачать через blob —
+      // тот же приём, что у QR-кода, там тоже мог тихо ничего не делать
+      // внутри Telegram (ошибки не бросает, просто WebView игнорирует клик
+      // по ссылке-скачиванию — поэтому запасной вариант там ни разу и не
+      // срабатывал). tg.openLink нужен АБСОЛЮТНЫЙ адрес, а deliverable_path
+      // с сервера приходит относительным (например "/uploads/..."), поэтому
+      // достраиваем его до полного через location.origin.
+      const absoluteUrl = src.startsWith("http") ? src : location.origin + src;
+      tg.openLink(absoluteUrl);
     });
   }
   showScreen("service-request-detail");

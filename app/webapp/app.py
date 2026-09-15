@@ -120,7 +120,10 @@ async def redirect_bot_paths_on_public_domain(request: Request, call_next):
     открываться там как раньше.
     """
     public_site_hosts = {"kaline.am", "www.kaline.am"}
-    site_path_prefixes = ("/shop", "/shop-static", "/support-chat", "/uploads", "/webhooks", "/favicon.ico")
+    site_path_prefixes = (
+        "/shop", "/shop-static", "/support-chat", "/uploads", "/webhooks", "/favicon.ico",
+        "/robots.txt", "/sitemap.xml",  # иначе Google получал бы редирект на / вместо самих файлов
+    )
 
     host = (request.url.hostname or "").lower()
     if host in public_site_hosts and not request.url.path.startswith(site_path_prefixes):

@@ -18,7 +18,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import select, func
 
@@ -144,6 +144,7 @@ async def render(request: Request, template_name: str, **context):
         "account": account,
         "stripe_enabled": bool(settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY),
         "csrf_token": get_or_create_csrf_token(request),
+        "settings_public_base_url": settings.PUBLIC_BASE_URL.rstrip("/"),
     })
     return templates.TemplateResponse(template_name, context)
 
@@ -176,6 +177,43 @@ async def terms_page(request: Request):
 @router.get("/shop/cookies", response_class=HTMLResponse)
 async def cookies_page(request: Request):
     return await render(request, "cookies.html")
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """
+    Без этого файла поисковики формально не запрещены заходить, но и явно не
+    приглашены — а главное, без строки Sitemap Google сам не факт что быстро
+    найдёт sitemap.xml. Ничего не закрываем от индексации (весь сайт публичный
+    и без личных данных), просто указываем, где искать карту сайта.
+    """
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        f"Sitemap: {settings.PUBLIC_BASE_URL}/sitemap.xml",
+    ]
+    return PlainTextResponse("\n".join(lines))
+
+
+@router.get("/sitemap.xml")
+async def sitemap_xml():
+    """
+    Список реальных публичных страниц для Google — карточки стран, разделы
+    услуг и статичные страницы. НЕ включаем сюда личные страницы (аккаунт,
+    чат, чекаут, заказ по guest-ссылке) — это не то, что должно всплывать
+    в поиске, и заявки/чужие заказы туда лезть тем более не должны.
+    """
+    urls = ["/shop/", "/shop/catalog", "/shop/services", "/shop/privacy", "/shop/terms", "/shop/cookies"]
+    async with get_session() as session:
+        countries = await _fetch_country_list(session)
+        categories = list((await session.execute(select(Category))).scalars())
+    urls += [f"/shop/country/{c['code']}" for c in countries]
+    urls += [f"/shop/services/{c.slug}" for c in categories]
+
+    base = settings.PUBLIC_BASE_URL.rstrip("/")
+    entries = "".join(f"<url><loc>{base}{u}</loc></url>" for u in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</urlset>'
+    return Response(content=xml, media_type="application/xml")
 
 
 async def _fetch_country_list(session):

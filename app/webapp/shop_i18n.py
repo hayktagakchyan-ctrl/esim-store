@@ -6,6 +6,11 @@ from fastapi import Request
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "brand": {"ru": "KaLine", "hy": "KaLine", "en": "KaLine"},
+    "meta_description_default": {
+        "ru": "eSIM для более чем 100 стран, доступ в лаунж-зоны аэропортов и туры. Оплата картой или криптовалютой, активация сразу после оплаты.",
+        "hy": "eSIM ավելի քան 100 երկրների համար, օդանավակայանի լաունջ հասանելիություն և տուրեր։ Վճարում քարտով կամ կրիպտոարժույթով, ակտիվացում անմիջապես վճարումից հետո։",
+        "en": "eSIM for 100+ countries, airport lounge access and tours. Pay by card or crypto, activated right after payment.",
+    },
 
     "nav_home": {"ru": "Главная", "hy": "Գլխավոր", "en": "Home"},
     "nav_catalog": {"ru": "Тарифы", "hy": "Սակագներ", "en": "Plans"},

@@ -904,7 +904,8 @@ async function openServiceRequestDetail(id) {
     if (isImage) {
       deliverableBlock += `<img src="${sr.deliverable_path}" alt="${escapeHtml(sr.deliverable_filename)}" style="max-width:100%; border-radius:12px; margin-bottom:12px; display:block;">`;
     }
-    deliverableBlock += `<button class="primary-btn" id="sr-download-btn" data-src="${sr.deliverable_path}" data-name="${escapeHtml(sr.deliverable_filename || "file")}" style="display:block; width:100%; text-align:center;">${t("service_download_button")}</button>`;
+    const absoluteDeliverableUrl = sr.deliverable_path.startsWith("http") ? sr.deliverable_path : location.origin + sr.deliverable_path;
+    deliverableBlock += `<a class="primary-btn" id="sr-download-btn" href="${absoluteDeliverableUrl}" target="_blank" rel="noopener" style="display:block; width:100%; text-align:center; text-decoration:none; box-sizing:border-box;">${t("service_download_button")}</a>`;
   }
 
   el.innerHTML = `
@@ -932,22 +933,18 @@ async function openServiceRequestDetail(id) {
   }
   const downloadBtn = document.getElementById("sr-download-btn");
   if (downloadBtn) {
-    // Обычная ссылка со скачиванием (<a download>) внутри Mini App Telegram
-    // ненадёжна — WebView её часто просто не обрабатывает, ничего не
-    // происходит по клику. Тот же приём, что уже работает для QR-кода eSIM
-    // (см. qr-download-btn выше): сначала пробуем скачать как blob, если не
-    // получилось — открываем через tg.openLink (собственный метод Telegram).
+    // Убрал свою JS-логику (blob-скачивание, потом tg.openLink) — ни то, ни
+    // другое не сработало на практике, оба раза без единой ошибки в коде,
+    // просто тихо ничего не происходило. Теперь это обычная ссылка
+    // (<a target="_blank">) — самый базовый браузерный механизм, никакого
+    // моего кода тут не выполняется вообще. Если и это не сработает — значит
+    // дело не в коде, а в том, как именно Telegram настроил переходы по
+    // ссылкам для этого конкретного мини-аппа (это уже не чинится кодом
+    // страницы, чинится настройками бота). Временный alert ниже — просто
+    // чтобы точно увидеть, какой адрес пытаемся открыть, если снова не
+    // сработает (уберу его в следующий раз, когда разберёмся).
     downloadBtn.addEventListener("click", () => {
-      const src = downloadBtn.dataset.src;
-      // Сразу через родной метод Telegram, без попытки скачать через blob —
-      // тот же приём, что у QR-кода, там тоже мог тихо ничего не делать
-      // внутри Telegram (ошибки не бросает, просто WebView игнорирует клик
-      // по ссылке-скачиванию — поэтому запасной вариант там ни разу и не
-      // срабатывал). tg.openLink нужен АБСОЛЮТНЫЙ адрес, а deliverable_path
-      // с сервера приходит относительным (например "/uploads/..."), поэтому
-      // достраиваем его до полного через location.origin.
-      const absoluteUrl = src.startsWith("http") ? src : location.origin + src;
-      tg.openLink(absoluteUrl);
+      tg.showAlert(`Открываю: ${downloadBtn.href}`);
     });
   }
   showScreen("service-request-detail");

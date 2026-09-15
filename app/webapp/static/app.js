@@ -65,7 +65,8 @@ function escapeHtml(text) {
 // --- Навигация между экранами ---
 const screens = [
   "home", "esim-countries", "esim-regions", "esim-packages", "esim-checkout",
-  "products", "my-esims", "balance", "profile", "notifications", "chats", "chat",
+  "products", "service-request-form", "service-requests", "service-request-detail",
+  "my-esims", "balance", "profile", "notifications", "chats", "chat",
 ];
 const TAB_ROOTS = { home: "home", "esim-countries": "browse", "my-esims": "my-esims", profile: "profile" };
 
@@ -141,6 +142,9 @@ document.getElementById("back-btn").addEventListener("click", () => {
   }
   if (!document.getElementById("screen-esim-regions").hidden) return showScreen("esim-countries");
   if (!document.getElementById("screen-products").hidden) return showScreen("home");
+  if (!document.getElementById("screen-service-request-form").hidden) return showScreen("products");
+  if (!document.getElementById("screen-service-requests").hidden) return showScreen("profile");
+  if (!document.getElementById("screen-service-request-detail").hidden) return showScreen("service-requests");
   if (!document.getElementById("screen-balance").hidden) return showScreen("profile");
   if (!document.getElementById("screen-notifications").hidden) return showScreen("profile");
   if (!document.getElementById("screen-chats").hidden) return showScreen("profile");
@@ -777,16 +781,157 @@ async function loadProducts(categorySlug) {
       ${p.description ? `<div class="product-description">${escapeHtml(p.description)}</div>` : ""}
       <div class="product-bottom">
         <span class="product-price"></span>
-        <button class="ask-btn" data-id="${p.id}">${t("product_ask_button")}</button>
+        <button class="ask-btn" data-id="${p.id}">${t("product_order_button")}</button>
       </div>
     `;
     if (p.price !== null) {
       card.querySelector(".product-price").textContent = `${p.price} ${p.currency}`;
     }
-    card.querySelector(".ask-btn").addEventListener("click", () => startProductChat(p.id));
+    card.querySelector(".ask-btn").addEventListener("click", () => openServiceRequestForm(p.id));
     list.appendChild(card);
   }
 }
+
+async function openServiceRequestForm(productId) {
+  const data = await api(`/api/products/${productId}/questions?lang=${currentLang}`);
+  document.getElementById("sr-form-title").textContent = data.product.title;
+  document.getElementById("sr-form-response-time").textContent = data.product.response_time_text || "";
+  document.getElementById("sr-form-response-time").hidden = !data.product.response_time_text;
+
+  const form = document.getElementById("sr-form");
+  form.innerHTML = "";
+  form.dataset.productId = productId;
+
+  for (const q of data.questions) {
+    const wrap = document.createElement("div");
+    wrap.className = "field";
+    const label = document.createElement("label");
+    label.textContent = q.question_text + (q.is_required ? " *" : "");
+    wrap.appendChild(label);
+
+    if (q.question_type === "yes_no") {
+      const sel = document.createElement("select");
+      sel.name = `answer_${q.id}`;
+      sel.innerHTML = `<option value="">—</option><option value="yes">${t("answer_yes")}</option><option value="no">${t("answer_no")}</option>`;
+      wrap.appendChild(sel);
+    } else if (q.question_type === "text") {
+      const inp = document.createElement("textarea");
+      inp.name = `answer_${q.id}`;
+      inp.rows = 2;
+      wrap.appendChild(inp);
+    } else {
+      const inp = document.createElement("input");
+      inp.type = "file";
+      inp.name = `answer_file_${q.id}`;
+      wrap.appendChild(inp);
+    }
+    if (q.is_required) wrap.querySelector("select,textarea,input").required = true;
+    form.appendChild(wrap);
+  }
+
+  const noteWrap = document.createElement("div");
+  noteWrap.className = "field";
+  noteWrap.innerHTML = `<label>${t("service_client_note_label")}</label><textarea name="client_note" rows="2"></textarea>`;
+  form.appendChild(noteWrap);
+
+  const submitBtn = document.createElement("button");
+  submitBtn.type = "submit";
+  submitBtn.className = "primary-btn";
+  submitBtn.textContent = t("service_request_submit");
+  form.appendChild(submitBtn);
+
+  showScreen("service-request-form");
+}
+
+document.getElementById("sr-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const form = e.target;
+  const fd = new FormData(form);
+  fd.append("product_id", form.dataset.productId);
+  try {
+    const res = await apiUpload("/api/service-requests", fd);
+    await openServiceRequestDetail(res.id);
+  } catch (err) {
+    alert(t("service_request_error"));
+  }
+});
+
+function serviceRequestStatusLabel(status) {
+  return t(`service_status_${status}`);
+}
+
+async function loadServiceRequests() {
+  const rows = await api(`/api/service-requests?lang=${currentLang}`);
+  const list = document.getElementById("service-requests-list");
+  list.innerHTML = "";
+  if (rows.length === 0) {
+    list.innerHTML = `<div class="empty">${t("catalog_empty")}</div>`;
+    return;
+  }
+  for (const r of rows) {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = `
+      <div class="main">
+        <div class="title">${escapeHtml(r.product_title)}</div>
+        <div class="subtitle">${serviceRequestStatusLabel(r.status)}</div>
+      </div>
+      <span class="chevron">›</span>
+    `;
+    row.addEventListener("click", () => openServiceRequestDetail(r.id));
+    list.appendChild(row);
+  }
+}
+
+async function openServiceRequestDetail(id) {
+  const sr = await api(`/api/service-requests/${id}?lang=${currentLang}`);
+  const el = document.getElementById("sr-detail-content");
+  let answersHtml = sr.answers.map((a) => {
+    let value = a.answer_text || (a.answer_bool === true ? t("answer_yes") : a.answer_bool === false ? t("answer_no") : "");
+    if (a.answer_file_filename) value = `📎 ${escapeHtml(a.answer_file_filename)}`;
+    return `<div class="field"><label>${escapeHtml(a.question_text)}</label><div>${escapeHtml(value)}</div></div>`;
+  }).join("");
+
+  let payBlock = "";
+  if (sr.status === "ready" && sr.final_price !== null) {
+    payBlock = `<button class="primary-btn" id="sr-pay-btn">${t("service_pay_balance_button")} — $${sr.final_price.toFixed(2)}</button>`;
+  }
+  let deliverableBlock = "";
+  if (sr.status === "paid") {
+    if (sr.admin_note) deliverableBlock += `<div class="field"><label>${t("service_admin_note")}</label><div>${escapeHtml(sr.admin_note)}</div></div>`;
+    if (sr.deliverable_path) deliverableBlock += `<a class="primary-btn" href="${sr.deliverable_path}" target="_blank" style="display:block; text-align:center; text-decoration:none;">${t("service_download_button")}</a>`;
+  }
+
+  el.innerHTML = `
+    <h3 style="margin-top:0;">${escapeHtml(sr.product_title)}</h3>
+    <p class="subtitle">${serviceRequestStatusLabel(sr.status)}</p>
+    ${sr.client_note ? `<div class="field"><label>${t("service_client_note_label")}</label><div>${escapeHtml(sr.client_note)}</div></div>` : ""}
+    ${answersHtml}
+    ${deliverableBlock}
+    ${payBlock}
+  `;
+  const payBtn = document.getElementById("sr-pay-btn");
+  if (payBtn) {
+    payBtn.addEventListener("click", async () => {
+      try {
+        await api(`/api/service-requests/${id}/pay`, { method: "POST" });
+        try {
+          const bal = await api("/api/balance");
+          document.getElementById("profile-balance-value").textContent = `$${bal.balance.toFixed(2)}`;
+        } catch (e) { /* обновится в любом случае при следующем открытии профиля */ }
+        await openServiceRequestDetail(id);
+      } catch (err) {
+        alert(t("service_insufficient_balance"));
+      }
+    });
+  }
+  showScreen("service-request-detail");
+}
+
+document.getElementById("profile-service-requests-row").addEventListener("click", async () => {
+  await loadServiceRequests();
+  showScreen("service-requests");
+});
 
 async function startProductChat(productId) {
   const res = await api("/api/conversations", {

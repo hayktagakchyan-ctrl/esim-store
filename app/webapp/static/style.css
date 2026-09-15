@@ -264,6 +264,27 @@ main.screen[hidden] { display: none !important; }
 }
 .search::placeholder { color: var(--text-tertiary); }
 
+/* --- Поля формы (заявка на услугу и т.п.) --- */
+.field { margin-bottom: 14px; }
+.field label {
+  display: block; font-size: 13px; font-weight: 600; color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.field input, .field textarea {
+  width: 100%;
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--surface-secondary);
+  color: var(--text);
+  font-size: 16px; /* не меньше 16px — иначе Safari на iPhone зумит страницу при фокусе */
+  font-family: inherit;
+  resize: vertical;
+}
+.field input[type="file"] { padding: 8px 10px; font-size: 14px; }
+.field input:focus, .field textarea:focus, .field select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 14px; }
+
 /* --- Иконки: монохромные SVG (Lucide), красятся через color + mask-image,
    а не через <img> (тот не даёт покрасить содержимое через CSS). --- */
 .icon-mask {
@@ -364,6 +385,11 @@ main.screen[hidden] { display: none !important; }
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .row .chevron { color: var(--text-tertiary); font-size: 18px; }
+/* .row иногда используется на <button> (не только <a>/<div>) — например,
+   кнопка "Региональные пакеты". У браузера свой цвет текста по умолчанию
+   для <button>, он не наследуется от темы сайта сам по себе — без этой
+   строки текст на тёмной теме был почти нечитаем (тёмный на тёмном). */
+button.row { color: inherit; font-family: inherit; text-align: left; width: 100%; cursor: pointer; }
 
 .package-row {
   display: flex;

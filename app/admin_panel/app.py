@@ -365,16 +365,25 @@ async def refund_order(
         order.status = OrderStatus.REFUNDED
         order.refund_reason = reason
 
-        if payment is not None and payment.provider == PaymentProvider.BALANCE and order.website_account_id:
+        if payment is not None and payment.provider == PaymentProvider.BALANCE:
             # Деньги при такой оплате никуда не уходили от нас — это была просто
             # запись на внутреннем балансе аккаунта. Возврат тут однозначный и
             # безопасный: просто начисляем обратно ту же сумму, без обращения к
             # внешнему провайдеру (для Idram/OxaPay/Stripe так сделать нельзя —
             # там деньги реально уходят наружу, и без подтверждённого документацией
             # эндпоинта возврата дёргать их API вслепую рискованно).
-            account = await session.get(WebsiteAccount, order.website_account_id)
+            # Заказ может принадлежать либо аккаунту сайта, либо пользователю бота
+            # (двойное владение, см. CLAUDE.md) — раньше тут проверялся только
+            # website_account_id, из-за чего возврат баланса за заказы, оплаченные
+            # в Telegram-боте, молча не происходил.
+            account = await session.get(WebsiteAccount, order.website_account_id) if order.website_account_id else None
+            bot_user = await session.get(User, order.user_id) if order.user_id else None
             if account is not None:
                 account.balance = round(account.balance + float(order.price_charged), 2)
+                order.refund_reason = (reason + " " if reason else "") + \
+                    f"[Автоматически возвращено на баланс: ${float(order.price_charged):.2f}]"
+            elif bot_user is not None:
+                bot_user.balance = round(bot_user.balance + float(order.price_charged), 2)
                 order.refund_reason = (reason + " " if reason else "") + \
                     f"[Автоматически возвращено на баланс: ${float(order.price_charged):.2f}]"
 

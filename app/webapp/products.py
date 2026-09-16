@@ -9,6 +9,7 @@
 """
 from datetime import datetime
 
+from aiogram.types import BufferedInputFile
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 
@@ -18,6 +19,7 @@ from app.database.models import (
     Category, Product, ProductQuestion, QuestionType,
     ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus, User,
 )
+from app.webapp.notify_bots import client_notify_bot
 from app.webapp.auth import get_current_user
 from app.webapp.uploads import save_service_file
 from app.webapp.notify_bots import support_notify_bot
@@ -225,6 +227,29 @@ async def pay_service_request(request_id: int, user: User = Depends(get_current_
         db_user.balance = round(db_user.balance - float(sr.final_price), 2)
         sr.status = ServiceRequestStatus.PAID
         sr.paid_at = datetime.utcnow()
+        await session.refresh(sr, attribute_names=["product"])
+        # Ссылка на файл внутри мини-аппа Telegram открывает его только во
+        # внешнем браузере (переходы по ссылкам из Mini App так устроены,
+        # обойти нельзя) — оттуда сохранить можно только вручную. Раз файл
+        # уже лежит байтами в базе (см. deliverable_data), самый надёжный
+        # способ отдать его — обычным сообщением от бота в чат: Telegram
+        # тогда сам предложит штатное "Сохранить", как с любым файлом.
+        deliverable_data = sr.deliverable_data
+        deliverable_filename = sr.deliverable_filename
+        product_title = sr.product.title("ru")
+        telegram_id = user.telegram_id
         await session.commit()
+
+    if deliverable_data:
+        try:
+            ext = (deliverable_filename or "").rsplit(".", 1)[-1].lower()
+            file = BufferedInputFile(deliverable_data, filename=deliverable_filename or "file")
+            caption = f"Заявка «{product_title}» оплачена — вот файл."
+            if ext in ("jpg", "jpeg", "png", "webp"):
+                await client_notify_bot.send_photo(chat_id=telegram_id, photo=file, caption=caption)
+            else:
+                await client_notify_bot.send_document(chat_id=telegram_id, document=file, caption=caption)
+        except Exception:
+            pass  # не срываем уже прошедшую оплату, если сообщение почему-то не ушло
 
     return {"ok": True}

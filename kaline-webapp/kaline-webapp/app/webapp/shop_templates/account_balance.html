@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}{{ t("nav_balance") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("nav_balance") }}</h2>
+
+    <div class="card" style="text-align:center;">
+      <div class="hint">{{ t("balance_current") }}</div>
+      <div style="font-family:var(--font-mono); font-size:36px; font-weight:600; margin:6px 0;">${{ "%.2f"|format(balance) }}</div>
+    </div>
+
+    {% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("balance_topup_title") }}</h3>
+      <form method="post" action="/shop/account/balance/topup">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="field">
+          <label for="amount">{{ t("balance_amount_label") }}</label>
+          <input type="text" id="amount" name="amount" placeholder="10" required>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <button class="payment-option" type="submit" name="method" value="idram">
+            <span class="icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></span>
+            {{ t("checkout_pay_idram") }}
+          </button>
+          <button class="payment-option" type="submit" name="method" value="oxapay">
+            <span class="icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 10h4.5a1.5 1.5 0 0 1 0 3H9m0 0h5a1.5 1.5 0 0 1 0 3H9"/></svg></span>
+            {{ t("checkout_pay_oxapay") }}
+          </button>
+          {% if stripe_enabled %}
+          <button class="payment-option" type="submit" name="method" value="stripe">
+            <span class="icon"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/></svg></span>
+            {{ t("checkout_pay_stripe") }}
+          </button>
+          {% endif %}
+        </div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("promo_title") }}</h3>
+      {% if promo_success %}<p class="hint" style="color:var(--success);">+ ${{ "%.2f"|format(promo_success) }}</p>{% endif %}
+      {% if promo_error %}<p class="error">{{ t(promo_error) }}</p>{% endif %}
+      <form method="post" action="/shop/promo/redeem" style="display:flex; gap:8px;">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <input type="text" name="code" placeholder="{{ t('promo_placeholder') }}" style="flex:1; min-width:0; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text);">
+        <button class="btn" type="submit" style="white-space:nowrap;">{{ t("promo_redeem_btn") }}</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0;">{{ t("referral_title") }}</h3>
+      <p class="hint">{{ t("referral_desc").format(percent=referral_percent) }}</p>
+      <input type="text" value="{{ referral_link }}" readonly onclick="this.select()" style="width:100%; padding:12px; border-radius:10px; border:none; background:var(--surface-secondary); color:var(--text); font-size:16px;">
+    </div>
+
+    {% if top_ups %}
+    <h3>{{ t("balance_history_title") }}</h3>
+    <div class="list">
+    {% for t_up in top_ups %}
+    <div class="row">
+      <span class="name">${{ "%.2f"|format(t_up.amount) }} — {{ t_up.provider.value }}</span>
+      <span class="meta">{{ t_up.status.value }}</span>
+    </div>
+    {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</section>
+{% endblock %}

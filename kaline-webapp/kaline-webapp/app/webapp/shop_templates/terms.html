@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ t("terms_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("terms_title") }}</h2>
+    <div class="card" style="line-height:1.7;">
+      {{ t("terms_body") | safe }}
+    </div>
+  </div>
+</section>
+{% endblock %}

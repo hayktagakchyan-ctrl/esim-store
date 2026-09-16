@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}{{ t("my_orders_title") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("my_orders_title") }}</h2>
+
+    {% for order in orders %}
+    <a class="row" href="/shop/order/{{ order.guest_token }}">
+      <span class="name">{{ order.package.country_name }} — {{ order.package.title }}</span>
+      <span class="meta">{{ t(status_keys[order.status]) }} ›</span>
+    </a>
+    {% else %}
+    <p class="hint" style="text-align:center;">{{ t("my_orders_empty") }}</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

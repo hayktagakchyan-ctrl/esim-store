@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ t("nav_service_requests") }} — {{ t("brand") }}{% endblock %}
+{% block body %}
+<section class="section">
+  <div class="container narrow">
+    <h2 class="section-title">{{ t("nav_service_requests") }}</h2>
+    <div class="list">
+      {% for r in requests %}
+      <a class="row" href="/shop/account/service-requests/{{ r.id }}">
+        <div>
+          <div class="name">{{ r.product_title }}</div>
+          <div class="meta">{{ r.created_at.strftime("%d.%m.%Y") }}{% if r.final_price %} · {{ r.final_price }} {{ r.currency }}{% endif %}</div>
+        </div>
+        <span class="status-badge {{ {'submitted': 'pending', 'ready': 'active', 'paid': 'active', 'cancelled': 'expired'}[r.status] }}">
+          {{ t("service_status_" + r.status) }}
+        </span>
+      </a>
+      {% else %}
+      <p class="hint" style="text-align:center;">{{ t("services_empty") }}</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}

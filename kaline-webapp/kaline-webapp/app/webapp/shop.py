@@ -1,0 +1,1459 @@
+"""
+Публичный сайт (не Mini App — обычные страницы для любого браузера, без Telegram).
+
+Изначально был нужен для того, чтобы Idram увидел настоящий сайт с реальным
+чекаутом, а не только Telegram-бота. Теперь на сайте — полный набор функций,
+как и в боте: eSIM, лаунж/туры через чат, поддержка. Всё на том же бэкенде
+(Order, Payment, Conversation, esimaccess) — просто ещё один "фронтенд" поверх
+него, со своим email/паролем вместо Telegram-идентичности.
+
+Регистрация ОБЯЗАТЕЛЬНА для покупки и для чата — без аккаунта можно только
+смотреть каталог и лендинг. Есть восстановление пароля по email (см.
+app/webapp/shop_email.py — если SMTP не настроен, ссылка на сброс дублируется
+в бот поддержки, чтобы можно было тестировать).
+"""
+import secrets
+import uuid
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from fastapi import APIRouter, Depends, Form, HTTPException, Request, UploadFile, File
+from fastapi.responses import HTMLResponse, RedirectResponse, PlainTextResponse, Response
+from fastapi.templating import Jinja2Templates
+from sqlalchemy import select, func
+
+from app.config import settings
+from app.database.db import get_session
+from app.database.models import (
+    Category, Conversation, ConversationMessage, ConversationStatus, Favorite, Order, OrderStatus,
+    Package, Payment, PaymentProvider, PaymentStatus, Product, Review, TopUp, WebsiteAccount,
+    Notification, NotificationType, PromoCode, PromoCodeRedemption,
+    ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
+)
+from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
+from app.csrf import get_or_create_csrf_token
+from app.services.payments import idram
+from app.services.payments.oxapay import oxapay_client, OxaPayError
+from app.services.payments import stripe_pay
+from app.services.payments.stripe_pay import StripePaymentError
+from app.webapp.notify_bots import support_notify_bot
+from app.webapp.payments import _fulfill_order, REFERRAL_BONUS_PERCENT, notify
+from app.webapp.shop_auth import get_current_account, hash_password, verify_password
+from app.webapp.shop_email import send_email
+from app.webapp.shop_i18n import get_lang, t as translate
+from app.webapp.uploads import save_service_file
+
+router = APIRouter()
+
+BASE_DIR = Path(__file__).resolve().parent
+templates = Jinja2Templates(directory=BASE_DIR / "shop_templates")
+
+
+def _country_flag(code: str) -> str:
+    """
+    ISO-код страны → эмодзи-флаг. Никаких картинок — это просто два Unicode-символа
+    "regional indicator" (буква A = U+1F1E6, и так далее по алфавиту), которые
+    современные шрифты сами рисуют как флаг. Бесплатно, без вопросов лицензии,
+    в отличие от настоящих фотографий.
+    """
+    code = (code or "").strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        return "🌐"
+    return "".join(chr(0x1F1E6 + ord(ch) - ord("A")) for ch in code)
+
+
+def _country_hue(code: str) -> int:
+    """Стабильный (для одной и той же страны — всегда одинаковый) цветовой тон,
+    чтобы у карточек стран были разные, но воспроизводимые градиенты — в диапазоне
+    фирменной гаммы (голубой-синий-фиолетовый, между --accent-gradient концами),
+    а не по всему спектру, чтобы не выбиваться из премиальной палитры KaLine."""
+    return 190 + sum(ord(c) for c in (code or "")) * 37 % 100  # 190..290: cyan → blue → purple
+
+
+_REGION_ICON_RULES = [
+    # Порядок важен: более специфичные варианты (напр. "центральная азия")
+    # должны проверяться раньше общих ("азия"), иначе им never достанется своя иконка.
+    ("🏔️", ("центральн.*ази", "central asia")),
+    ("🌋", ("центральн.*амери", "central america")),
+    ("🕌", ("ближн.*восток", "middle east")),
+    ("🦜", ("южн.*амери", "south america")),
+    ("🗽", ("север.*амери", "north america")),
+    ("🏝️", ("кариб", "caribbean")),
+    ("🐧", ("антаркт", "antarctica")),
+    ("🐻", ("росси", "снг", "russia", " cis", "cis ")),
+    ("🗼", ("европ", "europe")),
+    ("🦁", ("африк", "africa")),
+    ("🦘", ("океан", "oceania", "австрал", "australia")),
+    ("🐼", ("ази", "asia")),
+]
+
+
+def _region_icon(name: str) -> str:
+    """
+    Название регионального пакета → эмодзи-иконка (не картинка/фото — просто
+    подходящий по смыслу эмодзи, как и с флагами стран). Подбираем по ключевым
+    словам в названии; если ни одно не подошло — обычный глобус.
+    """
+    import re
+
+    low = (name or "").lower()
+    for icon, patterns in _REGION_ICON_RULES:
+        for p in patterns:
+            if re.search(p, low):
+                return icon
+    return "🌐"
+
+
+templates.env.filters["flag"] = _country_flag
+templates.env.filters["hue"] = _country_hue
+templates.env.filters["region_icon"] = _region_icon
+
+
+def _safe_next(next_url: str) -> str:
+    """
+    `next` приходит от клиента (query/form параметр) — если использовать его как
+    есть в редиректе, можно получить open redirect (напр. next=https://evil.com,
+    и после логина человека уносит на фишинговый сайт). Разрешаем только
+    относительные пути внутри нашего же сайта.
+    """
+    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return "/shop/"
+
+STATUS_KEYS = {
+    OrderStatus.PENDING_PAYMENT: "status_pending_payment",
+    OrderStatus.PAID: "status_paid",
+    OrderStatus.PROVISIONING: "status_provisioning",
+    OrderStatus.ACTIVE: "status_active",
+    OrderStatus.FAILED: "status_failed",
+    OrderStatus.REFUNDED: "status_refunded",
+}
+
+RESET_TOKEN_TTL = timedelta(hours=2)
+VERIFICATION_TOKEN_TTL = timedelta(hours=48)
+
+
+async def render(request: Request, template_name: str, **context):
+    """Общий рендер: добавляет lang/t()/account/csrf_token во все страницы сайта разом."""
+    lang = get_lang(request)
+    account = await get_current_account(request)
+    context.update({
+        "request": request,
+        "lang": lang,
+        "t": lambda key: translate(key, lang),
+        "account": account,
+        "stripe_enabled": bool(settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY),
+        "csrf_token": get_or_create_csrf_token(request),
+        "settings_public_base_url": settings.PUBLIC_BASE_URL.rstrip("/"),
+    })
+    return templates.TemplateResponse(template_name, context)
+
+
+def require_login_redirect(request: Request) -> RedirectResponse:
+    return RedirectResponse(url=f"/shop/login?next={request.url.path}", status_code=302)
+
+
+@router.get("/shop/set-lang/{lang}")
+async def set_lang(lang: str, next: str = "/shop/"):
+    if lang not in ("ru", "hy", "en"):
+        lang = "ru"
+    response = RedirectResponse(url=_safe_next(next), status_code=302)
+    response.set_cookie("site_lang", lang, max_age=60 * 60 * 24 * 365)
+    return response
+
+
+# --- Витрина: eSIM ---
+
+@router.get("/shop/privacy", response_class=HTMLResponse)
+async def privacy_page(request: Request):
+    return await render(request, "privacy.html")
+
+
+@router.get("/shop/terms", response_class=HTMLResponse)
+async def terms_page(request: Request):
+    return await render(request, "terms.html")
+
+
+@router.get("/shop/cookies", response_class=HTMLResponse)
+async def cookies_page(request: Request):
+    return await render(request, "cookies.html")
+
+
+@router.get("/robots.txt", response_class=PlainTextResponse)
+async def robots_txt():
+    """
+    Без этого файла поисковики формально не запрещены заходить, но и явно не
+    приглашены — а главное, без строки Sitemap Google сам не факт что быстро
+    найдёт sitemap.xml. Ничего не закрываем от индексации (весь сайт публичный
+    и без личных данных), просто указываем, где искать карту сайта.
+    """
+    lines = [
+        "User-agent: *",
+        "Allow: /",
+        f"Sitemap: {settings.PUBLIC_BASE_URL}/sitemap.xml",
+    ]
+    return PlainTextResponse("\n".join(lines))
+
+
+@router.get("/sitemap.xml")
+async def sitemap_xml():
+    """
+    Список реальных публичных страниц для Google — карточки стран, разделы
+    услуг и статичные страницы. НЕ включаем сюда личные страницы (аккаунт,
+    чат, чекаут, заказ по guest-ссылке) — это не то, что должно всплывать
+    в поиске, и заявки/чужие заказы туда лезть тем более не должны.
+    """
+    urls = ["/shop/", "/shop/catalog", "/shop/services", "/shop/privacy", "/shop/terms", "/shop/cookies"]
+    async with get_session() as session:
+        countries = await _fetch_country_list(session)
+        categories = list((await session.execute(select(Category))).scalars())
+    urls += [f"/shop/country/{c['code']}" for c in countries]
+    urls += [f"/shop/services/{c.slug}" for c in categories]
+
+    base = settings.PUBLIC_BASE_URL.rstrip("/")
+    entries = "".join(f"<url><loc>{base}{u}</loc></url>" for u in urls)
+    xml = f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{entries}</urlset>'
+    return Response(content=xml, media_type="application/xml")
+
+
+async def _fetch_country_list(session):
+    """
+    Список стран для выбора — только отдельные страны (не региональные пакеты,
+    у тех своя секция). Для каждого кода страны берём country_name именно из
+    самой СВЕЖЕЙ по updated_at записи — если где-то раньше вручную завели пакет
+    с опечаткой в названии (например код "AD" с названием "AD" вместо "Andorra"),
+    это не даст ему всплыть как отдельному "призрачному" пункту в списке рядом
+    с правильной записью.
+    """
+    latest_per_code = (
+        select(Package.country_code, func.max(Package.updated_at).label("max_updated"))
+        .where(Package.is_active.is_(True), Package.is_regional.is_(False))
+        .group_by(Package.country_code)
+        .subquery()
+    )
+    result = await session.execute(
+        select(Package.country_code, Package.country_name)
+        .join(
+            latest_per_code,
+            (Package.country_code == latest_per_code.c.country_code)
+            & (Package.updated_at == latest_per_code.c.max_updated),
+        )
+        .distinct()
+        .order_by(Package.country_name)
+    )
+    rows = result.all()
+
+    rating_rows = (
+        await session.execute(
+            select(Review.country_code, func.avg(Review.rating), func.count(Review.id))
+            .group_by(Review.country_code)
+        )
+    ).all()
+    ratings = {code: (round(float(avg), 1), count) for code, avg, count in rating_rows}
+
+    price_rows = (
+        await session.execute(
+            select(Package.country_code, func.min(Package.sell_price))
+            .where(Package.is_active.is_(True), Package.is_regional.is_(False))
+            .group_by(Package.country_code)
+        )
+    ).all()
+    from_prices = {code: float(price) for code, price in price_rows}
+
+    return [
+        {
+            "code": c, "name": n,
+            "avg_rating": ratings.get(c, (None, 0))[0], "review_count": ratings.get(c, (None, 0))[1],
+            "from_price": from_prices.get(c),
+        }
+        for c, n in rows
+    ]
+
+
+async def _fetch_region_list(session):
+    """Региональные пакеты — по одному представителю (самый дешёвый активный) на регион."""
+    result = await session.execute(
+        select(Package)
+        .where(Package.is_regional.is_(True), Package.is_active.is_(True))
+        .order_by(Package.country_code, Package.sell_price)
+    )
+    packages = list(result.scalars())
+    seen = set()
+    regions = []
+    for p in packages:
+        if p.country_code in seen:
+            continue
+        seen.add(p.country_code)
+        regions.append({"code": p.country_code, "name": p.country_name, "from_price": float(p.sell_price)})
+    return regions
+
+
+@router.get("/shop/", response_class=HTMLResponse)
+async def shop_home(request: Request):
+    async with get_session() as session:
+        countries = await _fetch_country_list(session)
+        regions = await _fetch_region_list(session)
+
+    return await render(request, "home.html", countries=countries, regions=regions)
+
+
+@router.get("/shop/catalog", response_class=HTMLResponse)
+async def shop_catalog(request: Request):
+    async with get_session() as session:
+        countries = await _fetch_country_list(session)
+        regions = await _fetch_region_list(session)
+
+    return await render(request, "catalog.html", countries=countries, regions=regions)
+
+
+@router.get("/shop/country/{country_code}", response_class=HTMLResponse)
+async def shop_country(request: Request, country_code: str):
+    account = await get_current_account(request)
+    async with get_session() as session:
+        result = await session.execute(
+            select(Package).where(Package.country_code == country_code, Package.is_active.is_(True))
+        )
+        packages = list(result.scalars())
+
+        reviews = list((
+            await session.execute(select(Review).where(Review.country_code == country_code))
+        ).scalars())
+        review_count = len(reviews)
+        avg_rating = round(sum(r.rating for r in reviews) / review_count, 1) if review_count else None
+
+        is_favorite = False
+        if account is not None:
+            fav = (
+                await session.execute(
+                    select(Favorite).where(Favorite.website_account_id == account.id, Favorite.country_code == country_code)
+                )
+            ).scalar_one_or_none()
+            is_favorite = fav is not None
+
+    if not packages:
+        raise HTTPException(status_code=404, detail="Пакеты для этой страны не найдены")
+
+    return await render(
+        request, "packages.html", packages=packages, country_name=packages[0].country_name,
+        country_code=country_code, avg_rating=avg_rating, review_count=review_count, is_favorite=is_favorite,
+    )
+
+
+@router.get("/shop/checkout/{package_id}", response_class=HTMLResponse)
+async def shop_checkout_form(request: Request, package_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+        db_account = await session.get(WebsiteAccount, account.id)
+
+    return await render(
+        request, "checkout.html", package=package, error=None,
+        balance=db_account.balance,
+        can_pay_from_balance=float(db_account.balance) >= float(package.sell_price),
+    )
+
+
+@router.post("/shop/checkout/{package_id}/promo", response_class=HTMLResponse)
+async def shop_checkout_promo(request: Request, package_id: int, code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    code = code.strip().upper()
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        db_account = await session.get(WebsiteAccount, account.id)
+        promo = (await session.execute(select(PromoCode).where(PromoCode.code == code))).scalar_one_or_none()
+
+        error = None
+        bonus_amount = None
+        if promo is None or not promo.is_active:
+            error = "promo_not_found"
+        elif promo.expires_at and promo.expires_at < datetime.utcnow():
+            error = "promo_expired"
+        elif promo.max_uses is not None and promo.used_count >= promo.max_uses:
+            error = "promo_limit"
+        else:
+            already = (
+                await session.execute(
+                    select(PromoCodeRedemption).where(
+                        PromoCodeRedemption.promo_code_id == promo.id,
+                        PromoCodeRedemption.website_account_id == account.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                error = "promo_used"
+            else:
+                db_account.balance = round(db_account.balance + promo.bonus_amount, 2)
+                promo.used_count += 1
+                session.add(PromoCodeRedemption(promo_code_id=promo.id, website_account_id=account.id))
+                await session.commit()
+                bonus_amount = promo.bonus_amount
+                await notify(
+                    session, website_account_id=account.id, type=NotificationType.PAYMENT,
+                    title="Промокод активирован",
+                    body=f"На баланс зачислено ${promo.bonus_amount:.2f} по промокоду {code}.",
+                )
+
+        balance_now = db_account.balance
+
+    return await render(
+        request, "checkout.html", package=package, error=None,
+        balance=balance_now, can_pay_from_balance=float(balance_now) >= float(package.sell_price),
+        promo_error=error, promo_success=bonus_amount,
+    )
+
+
+@router.post("/shop/checkout/{package_id}", response_class=HTMLResponse)
+async def shop_checkout_submit(request: Request, package_id: int, method: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    if method != "balance":
+        raise HTTPException(status_code=403, detail="Оплата заказов сейчас доступна только с баланса")
+
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        db_account = await session.get(WebsiteAccount, account.id)
+        if db_account.balance < float(package.sell_price):
+            return await render(
+                request, "checkout.html", package=package,
+                error="На балансе недостаточно средств — пополни его в «Мой баланс».",
+                balance=db_account.balance,
+                can_pay_from_balance=False,
+            )
+
+        order = Order(
+            user_id=None,
+            package_id=package.id,
+            status=OrderStatus.PENDING_PAYMENT,
+            price_charged=package.sell_price,
+            currency=package.currency,
+            email=account.email,
+            guest_token=uuid.uuid4().hex,
+            website_account_id=account.id,
+        )
+        session.add(order)
+        await session.commit()
+        await session.refresh(order)
+
+        external_id = str(uuid.uuid4())
+        payment = Payment(
+            order_id=order.id,
+            provider=PaymentProvider.BALANCE,
+            status=PaymentStatus.PAID,
+            amount=order.price_charged,
+            currency=order.currency,
+            external_payment_id=external_id,
+        )
+        db_account.balance = round(db_account.balance - float(order.price_charged), 2)
+        session.add(payment)
+        order.status = OrderStatus.PAID
+        await session.commit()
+        await _fulfill_order(session, order)
+        redirect_url = f"/shop/order/{order.guest_token}"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+@router.get("/shop/order/{guest_token}", response_class=HTMLResponse)
+async def shop_order_status(request: Request, guest_token: str):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        result = await session.execute(select(Order).where(Order.guest_token == guest_token))
+        order = result.scalar_one_or_none()
+        if order is None or order.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        await session.refresh(order, attribute_names=["package"])
+
+        if order.status == OrderStatus.PAID and order.esimaccess_order_no is None:
+            await _fulfill_order(session, order)
+            await session.refresh(order)
+
+    still_waiting = order.status in (OrderStatus.PENDING_PAYMENT, OrderStatus.PAID, OrderStatus.PROVISIONING)
+
+    existing_review = None
+    if order.status == OrderStatus.ACTIVE:
+        async with get_session() as session:
+            existing_review = (
+                await session.execute(select(Review).where(Review.order_id == order.id))
+            ).scalar_one_or_none()
+
+    return await render(
+        request, "order_status.html",
+        order=order, status_key=STATUS_KEYS[order.status], still_waiting=still_waiting,
+        existing_review=existing_review,
+    )
+
+
+# --- Другие услуги (лаунж/туры) — через чат, как в Mini App ---
+
+@router.get("/shop/services", response_class=HTMLResponse)
+async def shop_services(request: Request):
+    async with get_session() as session:
+        result = await session.execute(
+            select(Category).where(Category.is_active.is_(True)).order_by(Category.sort_order, Category.id)
+        )
+        categories = list(result.scalars())
+
+    lang = get_lang(request)
+    return await render(
+        request, "services.html",
+        categories=[{"slug": c.slug, "icon": c.icon, "title": c.title(lang), "subtitle": c.subtitle(lang)} for c in categories],
+    )
+
+
+@router.get("/shop/services/{slug}", response_class=HTMLResponse)
+async def shop_service_products(request: Request, slug: str):
+    lang = get_lang(request)
+    account = await get_current_account(request)
+    async with get_session() as session:
+        category = (await session.execute(select(Category).where(Category.slug == slug))).scalar_one_or_none()
+        if category is None:
+            raise HTTPException(status_code=404, detail="Категория не найдена")
+        products = list(
+            (await session.execute(
+                select(Product).where(Product.category_id == category.id, Product.is_active.is_(True))
+            )).scalars()
+        )
+        # Признак "есть анкета" — считаем сразу для всех товаров одним запросом,
+        # чтобы не дёргать БД в цикле по каждому товару.
+        product_ids = [p.id for p in products]
+        has_form_ids = set()
+        if product_ids:
+            rows = (await session.execute(
+                select(ProductQuestion.product_id).where(ProductQuestion.product_id.in_(product_ids)).distinct()
+            )).scalars()
+            has_form_ids = set(rows)
+
+    return await render(
+        request, "service_products.html",
+        category_id=category.id,
+        category_slug=slug,
+        category_title=category.title(lang),
+        logged_in=account is not None,
+        products=[
+            {"id": p.id, "title": p.title(lang), "description": p.description(lang),
+             "price": float(p.price) if p.price is not None else None, "currency": p.currency,
+             "has_form": p.id in has_form_ids}
+            for p in products
+        ],
+    )
+
+
+async def _notify_admin_new_message(client_label: str, topic_label: str, preview: str) -> None:
+    try:
+        await support_notify_bot.send_message(
+            chat_id=settings.SUPPORT_CHAT_ID,
+            text=f"🆕 Новое сообщение (сайт)\nОт: {client_label}\nТема: {topic_label}\n\n{preview}",
+        )
+    except Exception:
+        pass
+
+
+@router.post("/shop/chat/start")
+async def start_chat(request: Request, category_id: str = Form(""), product_id: str = Form("")):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    cat_id = int(category_id) if category_id else None
+    prod_id = int(product_id) if product_id else None
+
+    async with get_session() as session:
+        query = select(Conversation).where(
+            Conversation.website_account_id == account.id,
+            Conversation.category_id == cat_id,
+            Conversation.product_id == prod_id,
+            Conversation.status == ConversationStatus.OPEN,
+        )
+        existing = (await session.execute(query)).scalar_one_or_none()
+        if existing:
+            return RedirectResponse(url=f"/shop/chat/{existing.id}", status_code=302)
+
+        conversation = Conversation(
+            website_account_id=account.id,
+            category_id=cat_id,
+            product_id=prod_id,
+        )
+        session.add(conversation)
+        await session.commit()
+        await session.refresh(conversation)
+        conversation_id = conversation.id
+
+    return RedirectResponse(url=f"/shop/chat/{conversation_id}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Заявки на услуги через настраиваемую форму (см. ProductQuestion/ServiceRequest
+# в database/models.py) — альтернатива чату для товаров, где админ завёл вопросы.
+# ---------------------------------------------------------------------------
+
+async def _service_request_or_404(session, request_id: int, account) -> ServiceRequest:
+    sr = await session.get(ServiceRequest, request_id)
+    if sr is None or sr.website_account_id != account.id:
+        raise HTTPException(status_code=404, detail="Заявка не найдена")
+    await session.refresh(sr, attribute_names=["answers", "product"])
+    return sr
+
+
+@router.get("/shop/services/product/{product_id}/request", response_class=HTMLResponse)
+async def service_request_form(request: Request, product_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    lang = get_lang(request)
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None or not product.is_active:
+            raise HTTPException(status_code=404, detail="Услуга не найдена")
+        questions = list((await session.execute(
+            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
+            .order_by(ProductQuestion.position, ProductQuestion.id)
+        )).scalars())
+        # Пустой список вопросов — нормально: значит, у товара просто нет анкеты,
+        # форма отправится с одними базовыми полями (ничего через чат больше не оформляем).
+
+    return await render(
+        request, "service_request_form.html",
+        product={"id": product.id, "title": product.title(lang),
+                 "price": float(product.price) if product.price is not None else None, "currency": product.currency,
+                 "response_time_text": product.response_time_text},
+        questions=[{"id": q.id, "question_text": q.text(lang), "question_type": q.question_type, "is_required": q.is_required} for q in questions],
+    )
+
+
+@router.post("/shop/services/product/{product_id}/request")
+async def service_request_submit(request: Request, product_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    lang = get_lang(request)
+    form = await request.form()
+
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None or not product.is_active:
+            raise HTTPException(status_code=404, detail="Услуга не найдена")
+        questions = list((await session.execute(
+            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
+            .order_by(ProductQuestion.position, ProductQuestion.id)
+        )).scalars())
+
+        sr = ServiceRequest(
+            product_id=product_id, website_account_id=account.id, currency=product.currency,
+            client_note=(form.get("client_note") or "").strip() or None,
+        )
+        session.add(sr)
+        await session.flush()  # нужен sr.id — и для файлов на диске, и для FK у ответов
+
+        for q in questions:
+            answer = ServiceRequestAnswer(
+                service_request_id=sr.id, question_id=q.id,
+                question_text_ru=q.question_text_ru, question_text_hy=q.question_text_hy, question_text_en=q.question_text_en,
+                question_type=q.question_type,
+            )
+            if q.question_type == QuestionType.YES_NO:
+                raw = form.get(f"answer_{q.id}")
+                answer.answer_bool = (raw == "yes") if raw in ("yes", "no") else None
+                if q.is_required and answer.answer_bool is None:
+                    raise HTTPException(status_code=400, detail=f"Ответьте на вопрос: {q.text(lang)}")
+            elif q.question_type == QuestionType.TEXT:
+                raw = (form.get(f"answer_{q.id}") or "").strip()
+                answer.answer_text = raw or None
+                if q.is_required and not raw:
+                    raise HTTPException(status_code=400, detail=f"Заполните: {q.text(lang)}")
+            else:  # FILE
+                upload = form.get(f"answer_file_{q.id}")
+                if upload is not None and getattr(upload, "filename", ""):
+                    saved = await save_service_file(upload, sr.id)
+                    answer.answer_file_path = saved["url"]
+                    answer.answer_file_filename = saved["filename"]
+                    answer.answer_file_data = saved["data"]
+                    answer.answer_file_content_type = saved["content_type"]
+                elif q.is_required:
+                    raise HTTPException(status_code=400, detail=f"Прикрепите файл: {q.text(lang)}")
+            session.add(answer)
+
+        await session.commit()
+        request_id = sr.id
+
+    try:
+        await support_notify_bot.send_message(
+            chat_id=settings.SUPPORT_CHAT_ID,
+            text=f"🆕 Новая заявка на услугу (сайт)\n{product.title('ru')}\nОт: {account.email}\n"
+                 f"Посмотреть в админке: заявка #{request_id}",
+        )
+    except Exception:
+        pass
+
+    return RedirectResponse(url=f"/shop/account/service-requests/{request_id}", status_code=302)
+
+
+@router.get("/shop/account/service-requests", response_class=HTMLResponse)
+async def service_requests_list(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    lang = get_lang(request)
+    async with get_session() as session:
+        rows = list((await session.execute(
+            select(ServiceRequest).where(ServiceRequest.website_account_id == account.id)
+            .order_by(ServiceRequest.created_at.desc())
+        )).scalars())
+        for r in rows:
+            await session.refresh(r, attribute_names=["product"])
+
+    return await render(
+        request, "service_requests_list.html",
+        requests=[{"id": r.id, "product_title": r.product.title(lang), "status": r.status.value,
+                   "created_at": r.created_at, "final_price": r.final_price, "currency": r.currency} for r in rows],
+    )
+
+
+@router.get("/shop/account/service-requests/{request_id}", response_class=HTMLResponse)
+async def service_request_detail(request: Request, request_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        sr = await _service_request_or_404(session, request_id, account)
+        lang = get_lang(request)
+        await session.refresh(sr, attribute_names=["product"])
+        is_paid = sr.status == ServiceRequestStatus.PAID
+        is_cancelled = sr.status == ServiceRequestStatus.CANCELLED
+        return await render(
+            request, "service_request_detail.html",
+            sr={
+                "id": sr.id, "status": sr.status.value, "product_title": sr.product.title(lang),
+                "final_price": float(sr.final_price) if sr.final_price is not None else None,
+                "currency": sr.currency,
+                "response_time_text": sr.product.response_time_text,
+                "client_note": sr.client_note,
+                # Ответ админа виден клиенту после оплаты (та же логика, что раньше)
+                # ИЛИ при отклонении — это единственный способ узнать причину отказа,
+                # раньше клиент вообще не видел admin_note для отклонённой заявки.
+                # Файл (deliverable) — только после оплаты, отклонённой заявке он
+                # не полагается ни при каких условиях.
+                "admin_note": sr.admin_note if (is_paid or is_cancelled) else None,
+                "deliverable_path": sr.deliverable_path if is_paid else None,
+                "deliverable_filename": sr.deliverable_filename if is_paid else None,
+                "answers": [{"question_text": a.text(lang), "question_type": a.question_type.value,
+                             "answer_text": a.answer_text, "answer_bool": a.answer_bool,
+                             "answer_file_path": a.answer_file_path, "answer_file_filename": a.answer_file_filename}
+                            for a in sr.answers],
+            },
+            balance=account.balance,
+        )
+
+
+@router.post("/shop/account/service-requests/{request_id}/pay")
+async def service_request_pay(request: Request, request_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        sr = await _service_request_or_404(session, request_id, db_account)
+
+        if sr.status != ServiceRequestStatus.READY or sr.final_price is None:
+            raise HTTPException(status_code=400, detail="Эту заявку сейчас нельзя оплатить")
+        if db_account.balance < float(sr.final_price):
+            return RedirectResponse(url="/shop/account/balance?insufficient=1", status_code=302)
+
+        db_account.balance = round(db_account.balance - float(sr.final_price), 2)
+        sr.status = ServiceRequestStatus.PAID
+        sr.paid_at = datetime.utcnow()
+        await session.commit()
+
+    return RedirectResponse(url=f"/shop/account/service-requests/{request_id}", status_code=302)
+
+
+@router.get("/shop/chat/{conversation_id}", response_class=HTMLResponse)
+async def chat_page(request: Request, conversation_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    lang = get_lang(request)
+    async with get_session() as session:
+        conversation = await session.get(Conversation, conversation_id)
+        if conversation is None or conversation.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Чат не найден")
+
+        topic_label = translate("topic_support", lang)
+        if conversation.category_id:
+            category = await session.get(Category, conversation.category_id)
+            if category:
+                topic_label = category.title(lang)
+
+    return await render(request, "chat.html", conversation_id=conversation_id, topic_label=topic_label)
+
+
+@router.get("/shop/api/chat/{conversation_id}/messages")
+async def chat_messages(request: Request, conversation_id: int):
+    account = await get_current_account(request)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Войдите в аккаунт")
+
+    async with get_session() as session:
+        conversation = await session.get(Conversation, conversation_id)
+        if conversation is None or conversation.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Чат не найден")
+        await session.refresh(conversation, attribute_names=["messages"])
+
+    return [
+        {
+            "direction": m.direction, "text": m.text,
+            "attachment_url": m.attachment_url, "attachment_type": m.attachment_type,
+            "attachment_filename": m.attachment_filename, "created_at": m.created_at.isoformat(),
+        }
+        for m in conversation.messages
+    ]
+
+
+@router.post("/shop/api/chat/{conversation_id}/messages")
+async def chat_send(request: Request, conversation_id: int, text: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        raise HTTPException(status_code=401, detail="Войдите в аккаунт")
+
+    text = text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Пустое сообщение")
+
+    async with get_session() as session:
+        conversation = await session.get(Conversation, conversation_id)
+        if conversation is None or conversation.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Чат не найден")
+
+        session.add(ConversationMessage(conversation_id=conversation.id, direction="in", text=text))
+        conversation.last_message_preview = text[:255]
+        conversation.unread_by_admin = True
+        conversation.status = ConversationStatus.OPEN
+        await session.commit()
+
+        topic_label = "Поддержка"
+        if conversation.category_id:
+            category = await session.get(Category, conversation.category_id)
+            if category:
+                topic_label = category.title_ru
+
+    await _notify_admin_new_message(account.email, topic_label, text)
+    return {"ok": True}
+
+
+@router.get("/shop/account/chats", response_class=HTMLResponse)
+async def my_chats(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    lang = get_lang(request)
+    async with get_session() as session:
+        result = await session.execute(
+            select(Conversation)
+            .where(Conversation.website_account_id == account.id)
+            .order_by(Conversation.updated_at.desc())
+        )
+        conversations = list(result.scalars())
+
+        items = []
+        for c in conversations:
+            topic_label = translate("topic_support", lang)
+            if c.category_id:
+                category = await session.get(Category, c.category_id)
+                if category:
+                    topic_label = category.title(lang)
+            items.append({"id": c.id, "topic_label": topic_label, "last_message_preview": c.last_message_preview})
+
+    return await render(request, "account_chats.html", chats=items)
+
+
+# --- Аккаунт: регистрация / вход / выход / сброс пароля ---
+
+async def _send_verification_email(session, account: WebsiteAccount) -> None:
+    token = secrets.token_urlsafe(32)
+    account.verification_token = token
+    account.verification_sent_at = datetime.utcnow()
+    await session.commit()
+
+    verify_link = f"{settings.PUBLIC_BASE_URL}/shop/verify-email/{token}"
+    sent, error = send_email(
+        to=account.email, subject="Подтверди email — eSIM Store",
+        body=f"Перейди по ссылке, чтобы подтвердить email и получить доступ к покупкам и чатам "
+             f"(ссылка действует 48 часов):\n{verify_link}",
+    )
+    if not sent:
+        # Либо SMTP вообще не настроен (нормально для теста), либо настроен, но
+        # реально не смог отправить (неверный пароль/порт и т.п.) — это разные
+        # ситуации, поэтому не подписываем всё подряд как "не настроен".
+        reason = "SMTP не настроен" if error == "not_configured" else f"ошибка отправки — {error}"
+        try:
+            await support_notify_bot.send_message(
+                chat_id=settings.SUPPORT_CHAT_ID,
+                text=f"✉️ Подтверждение email\nEmail: {account.email}\n"
+                     f"Ссылка ({reason}, письмо не отправлено): {verify_link}",
+            )
+        except Exception:
+            pass
+
+
+@router.get("/shop/register", response_class=HTMLResponse)
+async def register_form(request: Request, next: str = "/shop/", ref: str = ""):
+    return await render(request, "register.html", error=None, next=next, ref=ref)
+
+
+@router.post("/shop/register", response_class=HTMLResponse)
+async def register_submit(
+    request: Request,
+    email: str = Form(...),
+    password: str = Form(...),
+    password_confirm: str = Form(...),
+    next: str = Form("/shop/"),
+    agree: bool = Form(False),
+    ref: str = Form(""),
+):
+    email = email.strip().lower()
+
+    # Вход и сброс пароля были защищены от перебора, а регистрация — нет:
+    # можно было скриптом спамить создание аккаунтов (и заодно наши письма
+    # через Resend, что бьёт по репутации домена-отправителя), а по разнице
+    # ответов — перебирать, какие email уже зарегистрированы.
+    rate_key = f"register:{request.client.host}"
+    if await is_blocked(rate_key):
+        return await render(
+            request, "register.html",
+            error="Слишком много попыток — подожди несколько минут и попробуй снова.",
+            next=next, ref=ref,
+        )
+    await register_failure(rate_key)  # считаем каждую попытку регистрации, не только неудачную
+
+    if not agree:
+        return await render(request, "register.html", error="Нужно согласиться с условиями использования.", next=next, ref=ref)
+    if "@" not in email or "." not in email:
+        return await render(request, "register.html", error="Введите настоящий email.", next=next, ref=ref)
+    if len(password) < 8:
+        return await render(request, "register.html", error="Пароль должен быть не короче 8 символов.", next=next, ref=ref)
+    if password != password_confirm:
+        return await render(request, "register.html", error="Пароли не совпадают.", next=next, ref=ref)
+
+    async with get_session() as session:
+        existing = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
+        if existing is not None:
+            return await render(request, "register.html", error="Аккаунт с таким email уже существует.", next=next, ref=ref)
+
+        referred_by_id = None
+        if ref:
+            referrer = (
+                await session.execute(select(WebsiteAccount).where(WebsiteAccount.referral_code == ref))
+            ).scalar_one_or_none()
+            if referrer is not None:
+                referred_by_id = referrer.id
+
+        account = WebsiteAccount(
+            email=email,
+            password_hash=hash_password(password),
+            referral_code=secrets.token_urlsafe(6),
+            referred_by_id=referred_by_id,
+        )
+        session.add(account)
+        await session.commit()
+        await session.refresh(account)
+
+        await _send_verification_email(session, account)
+
+    # Сессию НЕ выдаём — сначала нужно подтвердить email по ссылке из письма.
+    return await render(request, "check_email.html", email=email, next=next)
+
+
+@router.post("/shop/resend-verification", response_class=HTMLResponse)
+async def resend_verification(request: Request, email: str = Form(...), next: str = Form("/shop/")):
+    email = email.strip().lower()
+    rate_key = f"{request.client.host}:{email}:verify"
+
+    if not await is_blocked(rate_key):
+        await register_failure(rate_key)  # используем как счётчик отправок, не только неудач
+        async with get_session() as session:
+            account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
+            if account is not None and not account.is_verified:
+                await _send_verification_email(session, account)
+
+    # Один и тот же ответ независимо от результата — не раскрываем, существует ли email.
+    return await render(request, "check_email.html", email=email, next=next)
+
+
+@router.get("/shop/verify-email/{token}", response_class=HTMLResponse)
+async def verify_email(request: Request, token: str):
+    async with get_session() as session:
+        account = (
+            await session.execute(select(WebsiteAccount).where(WebsiteAccount.verification_token == token))
+        ).scalar_one_or_none()
+
+        if account is None:
+            return await render(request, "verify_email_result.html", success=False, expired=False)
+
+        if account.is_verified:
+            # Уже подтверждено — сюда попадаем, когда по ссылке кто-то переходит повторно.
+            # Это нормально и ожидаемо: пока не настроен SMTP, ссылка приходит обычным
+            # сообщением в Telegram, а Telegram сам иногда переходит по ссылкам в
+            # сообщениях, чтобы сделать превью — то есть настоящий клик человека может
+            # оказаться уже вторым по счёту. Раньше здесь стирался токен после первого
+            # перехода, и настоящий клик после превью-бота показывал ложную ошибку.
+            request.session["account_id"] = account.id
+            return await render(request, "verify_email_result.html", success=True, expired=False)
+
+        if account.verification_sent_at is None or datetime.utcnow() - account.verification_sent_at > VERIFICATION_TOKEN_TTL:
+            return await render(request, "verify_email_result.html", success=False, expired=True, email=account.email)
+
+        account.is_verified = True
+        account.verification_sent_at = None
+        # Токен намеренно НЕ обнуляем — см. комментарий выше про повторные переходы.
+        await session.commit()
+        account_id = account.id
+
+    # Подтвердил email — сразу и логиним, лишний раз вводить пароль не нужно.
+    request.session["account_id"] = account_id
+    return await render(request, "verify_email_result.html", success=True, expired=False)
+
+
+@router.get("/shop/login", response_class=HTMLResponse)
+async def login_form(request: Request, next: str = "/shop/"):
+    return await render(request, "login.html", error=None, next=next)
+
+
+@router.post("/shop/login", response_class=HTMLResponse)
+async def login_submit(request: Request, email: str = Form(...), password: str = Form(...), next: str = Form("/shop/")):
+    email = email.strip().lower()
+    rate_key = f"{request.client.host}:{email}"
+
+    if await is_blocked(rate_key):
+        return await render(
+            request, "login.html", error="Слишком много попыток — подожди несколько минут и попробуй снова.", next=next,
+        )
+
+    async with get_session() as session:
+        account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
+
+    if account is None or not verify_password(password, account.password_hash):
+        await register_failure(rate_key)
+        return await render(request, "login.html", error="Неверный email или пароль.", next=next)
+
+    if not account.is_verified:
+        return await render(
+            request, "login.html",
+            error="Email ещё не подтверждён — проверь почту (или запроси письмо ещё раз).",
+            next=next, unverified_email=email,
+        )
+
+    await reset_rate_limit(rate_key)
+    request.session["account_id"] = account.id
+    return RedirectResponse(url=_safe_next(next), status_code=302)
+
+
+@router.get("/shop/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/shop/", status_code=302)
+
+
+@router.get("/shop/forgot-password", response_class=HTMLResponse)
+async def forgot_password_form(request: Request):
+    return await render(request, "forgot_password.html", error=None, sent=False)
+
+
+@router.post("/shop/forgot-password", response_class=HTMLResponse)
+async def forgot_password_submit(request: Request, email: str = Form(...)):
+    email = email.strip().lower()
+    rate_key = f"{request.client.host}:{email}:reset"
+
+    if await is_blocked(rate_key):
+        # Тот же самый ответ, что и в обычном случае — не выдаём, что сработал лимит,
+        # иначе это тоже способ проверить, существует ли такой email в базе.
+        return await render(request, "forgot_password.html", error=None, sent=True)
+    await register_failure(rate_key)  # считаем каждый запрос как "попытку", не только неудачную
+
+    async with get_session() as session:
+        account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.email == email))).scalar_one_or_none()
+        if account is not None:
+            token = secrets.token_urlsafe(32)
+            account.password_reset_token = token
+            account.password_reset_expires = datetime.utcnow() + RESET_TOKEN_TTL
+            await session.commit()
+
+            reset_link = f"{settings.PUBLIC_BASE_URL}/shop/reset-password/{token}"
+            sent, error = send_email(
+                to=email, subject="Восстановление пароля — eSIM Store",
+                body=f"Перейдите по ссылке, чтобы задать новый пароль (ссылка действует 2 часа):\n{reset_link}",
+            )
+            if not sent:
+                reason = "SMTP не настроен" if error == "not_configured" else f"ошибка отправки — {error}"
+                try:
+                    await support_notify_bot.send_message(
+                        chat_id=settings.SUPPORT_CHAT_ID,
+                        text=f"🔑 Запрос сброса пароля\nEmail: {email}\nСсылка ({reason}, письмо не отправлено): {reset_link}",
+                    )
+                except Exception:
+                    pass
+
+    # Одинаковый ответ независимо от того, найден ли email — чтобы не раскрывать,
+    # какие адреса зарегистрированы.
+    return await render(request, "forgot_password.html", error=None, sent=True)
+
+
+@router.get("/shop/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_form(request: Request, token: str):
+    async with get_session() as session:
+        account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.password_reset_token == token))).scalar_one_or_none()
+
+    valid = account is not None and account.password_reset_expires and account.password_reset_expires > datetime.utcnow()
+    return await render(request, "reset_password.html", token=token, valid=valid, error=None)
+
+
+@router.post("/shop/reset-password/{token}", response_class=HTMLResponse)
+async def reset_password_submit(request: Request, token: str, password: str = Form(...)):
+    async with get_session() as session:
+        account = (await session.execute(select(WebsiteAccount).where(WebsiteAccount.password_reset_token == token))).scalar_one_or_none()
+        valid = account is not None and account.password_reset_expires and account.password_reset_expires > datetime.utcnow()
+
+        if not valid:
+            return await render(request, "reset_password.html", token=token, valid=False, error=None)
+
+        if len(password) < 8:
+            return await render(request, "reset_password.html", token=token, valid=True, error="Пароль должен быть не короче 8 символов.")
+
+        account.password_hash = hash_password(password)
+        account.password_reset_token = None
+        account.password_reset_expires = None
+        await session.commit()
+
+    return RedirectResponse(url="/shop/login", status_code=302)
+
+
+@router.get("/shop/account/orders", response_class=HTMLResponse)
+async def my_orders(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        result = await session.execute(
+            select(Order).where(Order.website_account_id == account.id).order_by(Order.created_at.desc())
+        )
+        orders = list(result.scalars())
+        for o in orders:
+            await session.refresh(o, attribute_names=["package"])
+
+    return await render(request, "account_orders.html", orders=orders, status_keys=STATUS_KEYS)
+
+
+@router.get("/shop/account/settings", response_class=HTMLResponse)
+async def account_settings(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+    return await render(request, "account_settings.html", error=None, success=False)
+
+
+@router.post("/shop/account/settings", response_class=HTMLResponse)
+async def account_settings_submit(
+    request: Request,
+    current_password: str = Form(...),
+    new_password: str = Form(...),
+    new_password_confirm: str = Form(...),
+):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    if not verify_password(current_password, account.password_hash):
+        return await render(request, "account_settings.html", error="settings_password_wrong_current", success=False)
+    if new_password != new_password_confirm:
+        return await render(request, "account_settings.html", error="settings_password_mismatch", success=False)
+    if len(new_password) < 8:
+        return await render(request, "account_settings.html", error="password_too_short", success=False)
+
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        db_account.password_hash = hash_password(new_password)
+        await session.commit()
+
+    return await render(request, "account_settings.html", error=None, success=True)
+
+
+# --- Баланс, пополнение, реферальная программа ---
+
+@router.get("/shop/account/balance", response_class=HTMLResponse)
+async def account_balance(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        top_ups = list((
+            await session.execute(
+                select(TopUp).where(TopUp.website_account_id == account.id).order_by(TopUp.created_at.desc()).limit(20)
+            )
+        ).scalars())
+
+    referral_link = f"{settings.PUBLIC_BASE_URL}/shop/register?ref={db_account.referral_code}"
+    return await render(
+        request, "account_balance.html",
+        balance=db_account.balance, top_ups=top_ups, referral_link=referral_link,
+        referral_percent=REFERRAL_BONUS_PERCENT, error=None,
+    )
+
+
+@router.post("/shop/account/balance/topup", response_class=HTMLResponse)
+async def account_balance_topup(request: Request, amount: str = Form(...), method: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    try:
+        amount_value = round(float(amount), 2)
+    except ValueError:
+        amount_value = 0
+    if amount_value < 1:
+        return await render(
+            request, "account_balance.html", balance=account.balance, top_ups=[],
+            referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+            referral_percent=REFERRAL_BONUS_PERCENT, error="Минимальная сумма пополнения — $1.",
+        )
+    if method not in ("idram", "oxapay", "stripe"):
+        raise HTTPException(status_code=400, detail="Неизвестный способ оплаты")
+    if method == "oxapay" and not settings.ENABLE_OXAPAY:
+        raise HTTPException(status_code=403, detail="Оплата через OxaPay временно недоступна")
+    if method == "stripe" and not (settings.ENABLE_STRIPE and settings.STRIPE_SECRET_KEY):
+        raise HTTPException(status_code=403, detail="Оплата картой (Stripe) временно недоступна")
+
+    external_id = str(uuid.uuid4())
+    async with get_session() as session:
+        top_up = TopUp(
+            website_account_id=account.id, amount=amount_value, currency="USD",
+            provider={"idram": PaymentProvider.IDRAM, "oxapay": PaymentProvider.OXAPAY, "stripe": PaymentProvider.STRIPE}[method],
+            status=PaymentStatus.PENDING, external_payment_id=external_id,
+        )
+
+        if method == "idram":
+            session.add(top_up)
+            await session.commit()
+            redirect_url = f"/pay/idram/{external_id}"
+        elif method == "stripe":
+            try:
+                checkout_url = await stripe_pay.create_checkout_session(
+                    amount=amount_value, currency="USD", description="Пополнение баланса",
+                    success_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance?paid=1",
+                    cancel_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance",
+                    client_reference_id=external_id, email=account.email,
+                )
+            except StripePaymentError as exc:
+                return await render(
+                    request, "account_balance.html", balance=account.balance, top_ups=[],
+                    referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+                    referral_percent=REFERRAL_BONUS_PERCENT,
+                    error=f"Платёжная система временно недоступна: {exc}",
+                )
+            top_up.pay_link = checkout_url
+            session.add(top_up)
+            await session.commit()
+            redirect_url = checkout_url
+        else:
+            try:
+                invoice = await oxapay_client.create_invoice(
+                    amount=amount_value, currency="USD", order_id=external_id,
+                    description="Пополнение баланса",
+                    callback_url=f"{settings.PUBLIC_BASE_URL}/webhooks/oxapay",
+                    return_url=f"{settings.PUBLIC_BASE_URL}/shop/account/balance",
+                )
+            except OxaPayError as exc:
+                return await render(
+                    request, "account_balance.html", balance=account.balance, top_ups=[],
+                    referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={account.referral_code}",
+                    referral_percent=REFERRAL_BONUS_PERCENT,
+                    error=f"Платёжная система временно недоступна: {exc}",
+                )
+            top_up.provider_order_id = invoice["track_id"]
+            top_up.pay_link = invoice["payment_url"]
+            session.add(top_up)
+            await session.commit()
+            redirect_url = invoice["payment_url"]
+
+    return RedirectResponse(url=redirect_url, status_code=303)
+
+
+# --- Избранное ---
+
+@router.post("/shop/favorites/toggle")
+async def toggle_favorite(request: Request, country_code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        existing = (
+            await session.execute(
+                select(Favorite).where(Favorite.website_account_id == account.id, Favorite.country_code == country_code)
+            )
+        ).scalar_one_or_none()
+        if existing is not None:
+            await session.delete(existing)
+        else:
+            session.add(Favorite(website_account_id=account.id, country_code=country_code))
+        await session.commit()
+
+    referer = request.headers.get("referer", "/shop/catalog")
+    return RedirectResponse(url=referer, status_code=302)
+
+
+# --- Отзывы ---
+
+@router.post("/shop/order/{guest_token}/review")
+async def submit_review(request: Request, guest_token: str, rating: int = Form(...), comment: str = Form("")):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=400, detail="Оценка должна быть от 1 до 5")
+
+    async with get_session() as session:
+        order = (await session.execute(select(Order).where(Order.guest_token == guest_token))).scalar_one_or_none()
+        if order is None or order.website_account_id != account.id:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        if order.status != OrderStatus.ACTIVE:
+            raise HTTPException(status_code=400, detail="Отзыв можно оставить только на активированный eSIM")
+
+        existing = (await session.execute(select(Review).where(Review.order_id == order.id))).scalar_one_or_none()
+        if existing is not None:
+            raise HTTPException(status_code=400, detail="Отзыв на этот заказ уже оставлен")
+
+        await session.refresh(order, attribute_names=["package"])
+        session.add(Review(
+            website_account_id=account.id, order_id=order.id,
+            country_code=order.package.country_code, rating=rating, comment=comment.strip() or None,
+        ))
+        await session.commit()
+
+    return RedirectResponse(url=f"/shop/order/{guest_token}", status_code=302)
+
+
+@router.get("/shop/api/favorites")
+async def api_favorites(request: Request):
+    account = await get_current_account(request)
+    if account is None:
+        return {"codes": []}
+    async with get_session() as session:
+        favs = list((
+            await session.execute(select(Favorite.country_code).where(Favorite.website_account_id == account.id))
+        ).scalars())
+    return {"codes": favs}
+
+
+# --- Уведомления ---
+
+@router.get("/shop/account/notifications", response_class=HTMLResponse)
+async def account_notifications(request: Request, type: str = "all"):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    async with get_session() as session:
+        query = select(Notification).where(Notification.website_account_id == account.id)
+        if type != "all":
+            query = query.where(Notification.type == NotificationType(type))
+        result = await session.execute(query.order_by(Notification.created_at.desc()).limit(50))
+        items = list(result.scalars())
+
+        all_items = list((
+            await session.execute(select(Notification).where(Notification.website_account_id == account.id))
+        ).scalars())
+        unread_ids = [n.id for n in items if not n.is_read]
+        for nid in unread_ids:
+            db_notif = await session.get(Notification, nid)
+            db_notif.is_read = True
+        if unread_ids:
+            await session.commit()
+
+    counts = {t.value: len([n for n in all_items if n.type == t]) for t in NotificationType}
+    return await render(request, "notifications.html", items=items, counts=counts, current_type=type)
+
+
+# --- Промокоды ---
+
+@router.post("/shop/promo/redeem", response_class=HTMLResponse)
+async def redeem_promo(request: Request, code: str = Form(...)):
+    account = await get_current_account(request)
+    if account is None:
+        return require_login_redirect(request)
+
+    code = code.strip().upper()
+    async with get_session() as session:
+        db_account = await session.get(WebsiteAccount, account.id)
+        promo = (await session.execute(select(PromoCode).where(PromoCode.code == code))).scalar_one_or_none()
+
+        error = None
+        bonus_amount = None
+        if promo is None or not promo.is_active:
+            error = "promo_not_found"
+        elif promo.expires_at and promo.expires_at < datetime.utcnow():
+            error = "promo_expired"
+        elif promo.max_uses is not None and promo.used_count >= promo.max_uses:
+            error = "promo_limit"
+        else:
+            already = (
+                await session.execute(
+                    select(PromoCodeRedemption).where(
+                        PromoCodeRedemption.promo_code_id == promo.id,
+                        PromoCodeRedemption.website_account_id == account.id,
+                    )
+                )
+            ).scalar_one_or_none()
+            if already is not None:
+                error = "promo_used"
+            else:
+                db_account.balance = round(db_account.balance + promo.bonus_amount, 2)
+                promo.used_count += 1
+                session.add(PromoCodeRedemption(promo_code_id=promo.id, website_account_id=account.id))
+                await session.commit()
+                bonus_amount = promo.bonus_amount
+                await notify(
+                    session, website_account_id=account.id, type=NotificationType.PAYMENT,
+                    title="Промокод активирован",
+                    body=f"На баланс зачислено ${promo.bonus_amount:.2f} по промокоду {code}.",
+                )
+
+        top_ups = list((
+            await session.execute(
+                select(TopUp).where(TopUp.website_account_id == account.id).order_by(TopUp.created_at.desc()).limit(20)
+            )
+        ).scalars())
+        balance_now = db_account.balance
+
+    return await render(
+        request, "account_balance.html",
+        balance=balance_now, top_ups=top_ups, referral_link=f"{settings.PUBLIC_BASE_URL}/shop/register?ref={db_account.referral_code}",
+        referral_percent=REFERRAL_BONUS_PERCENT, error=None,
+        promo_error=error, promo_success=bonus_amount,
+    )

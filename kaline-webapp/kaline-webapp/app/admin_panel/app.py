@@ -1,0 +1,1439 @@
+"""
+Отдельная веб-админка для просмотра заказов и оформления возвратов.
+Запуск отдельно от ботов: uvicorn app.admin_panel.app:app --port 8000
+
+Рассчитана на одного администратора (тебя) — поэтому авторизация простая:
+логин/пароль из .env + сессионная cookie, без ролей и регистрации.
+"""
+from pathlib import Path
+from datetime import datetime
+import json
+
+from fastapi import FastAPI, Request, Form, Depends, HTTPException, UploadFile, File
+from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
+from sqlalchemy import select, String, func
+
+from app.config import settings
+from app.database.db import get_session, init_db
+from app.database.models import (
+    Category, Order, OrderStatus, Package, Product, User, WebsiteAccount, PromoCode,
+    ProductQuestion, QuestionType, ServiceRequest, ServiceRequestAnswer, ServiceRequestStatus,
+    Notification, NotificationType, AdminUser, AdminRole, ReferralBonus, Review,
+    Payment, PaymentProvider,
+)
+from app.rate_limit import is_blocked, register_failure, reset as reset_rate_limit
+from app.csrf import get_or_create_csrf_token, verify_csrf
+from app.services.esimaccess import esimaccess_client, ESimAccessError
+from app.webapp.payments import _fulfill_order, notify
+from app.webapp.uploads import save_service_file
+from app.webapp.shop_auth import hash_password, verify_password
+
+BASE_DIR = Path(__file__).resolve().parent
+
+app = FastAPI(
+    title="eSIM Store — Админка",
+    docs_url=None if settings.SECURE_COOKIES else "/docs",
+    redoc_url=None if settings.SECURE_COOKIES else "/redoc",
+    openapi_url=None if settings.SECURE_COOKIES else "/openapi.json",
+)
+
+
+@app.on_event("startup")
+async def on_startup():
+    # Та же логика, что и в app/webapp/app.py — таблицы должны быть готовы
+    # независимо от того, какой из трёх сервисов Railway стартовал первым.
+    await init_db()
+
+
+@app.middleware("http")
+async def csrf_protection(request: Request, call_next):
+    """См. подробное объяснение в app/webapp/app.py — тот же механизм, тут
+    проще: вся админка на сессионных cookie, исключений по путям не нужно.
+    Порядок регистрации ниже (до add_middleware(SessionMiddleware)) важен
+    по той же причине, что и в app/webapp/app.py — иначе request.session
+    ещё не существует в момент проверки."""
+    if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        if not await verify_csrf(request):
+            return templates.TemplateResponse(
+                "error.html", {"request": request, "status_code": 403}, status_code=403,
+            )
+    return await call_next(request)
+
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.ADMIN_PANEL_SECRET_KEY,
+    https_only=settings.SECURE_COOKIES,
+    same_site="lax",
+)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains"
+    # Админка никогда никуда не встраивается — можно закрывать без исключений.
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+    return response
+
+
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+def _admin_template_context(request: Request) -> dict:
+    """Доступно во ВСЕХ шаблонах без явной передачи — текущая роль вошедшего
+    админа, чтобы прятать/показывать то, что зависит от прав (напр. правку
+    баланса — см. users_list.html), и CSRF-токен для форм (см. app/csrf.py)."""
+    return {
+        "is_full_admin": request.session.get("admin_role", AdminRole.FULL.value) == AdminRole.FULL.value,
+        "admin_login": request.session.get("admin_login", settings.ADMIN_PANEL_LOGIN),
+        "csrf_token": get_or_create_csrf_token(request),
+        # Файлы заявок (ваучер админа, вложение клиента) отдаёт сервис сайта/бота,
+        # а не сама админка (это два разных развёрнутых сервиса на Railway) —
+        # поэтому ссылки на них в шаблонах должны быть абсолютными, не просто
+        # "/uploads/...", иначе браузер попробует открыть их на домене САМОЙ
+        # админки, где такого пути не существует.
+        "public_base_url": settings.PUBLIC_BASE_URL.rstrip("/"),
+    }
+
+
+templates = Jinja2Templates(directory=BASE_DIR / "templates", context_processors=[_admin_template_context])
+
+# (label, число закрашенных "делений сигнала" из 4, css-класс цвета) — используется в таблице заказов
+STATUS_META = {
+    OrderStatus.PENDING_PAYMENT: ("Ждёт оплаты", 1, "amber"),
+    OrderStatus.PAID: ("Оплачен", 2, "blue"),
+    OrderStatus.PROVISIONING: ("Оформляется", 3, "blue"),
+    OrderStatus.ACTIVE: ("Активен", 4, "green"),
+    OrderStatus.FAILED: ("Ошибка", 0, "red"),
+    OrderStatus.REFUNDED: ("Возврат", 0, "red"),
+}
+templates.env.globals["STATUS_META"] = STATUS_META
+templates.env.globals["OrderStatus"] = OrderStatus
+
+
+def require_login(request: Request) -> None:
+    if not request.session.get("authenticated"):
+        raise HTTPException(status_code=303, headers={"Location": "/login"})
+
+
+def require_full_admin(request: Request) -> None:
+    """Для действий, которые нельзя доверять роли 'support' — сейчас это только
+    правка баланса и управление другими админами."""
+    require_login(request)
+    if request.session.get("admin_role", AdminRole.FULL.value) != AdminRole.FULL.value:
+        raise HTTPException(status_code=403, detail="Недостаточно прав — нужен полный доступ")
+
+
+@app.exception_handler(HTTPException)
+async def redirect_to_login(request: Request, exc: HTTPException):
+    if exc.status_code == 303:
+        return RedirectResponse(url="/login")
+    raise exc
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_form(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+
+
+@app.post("/login")
+async def login_submit(request: Request, login: str = Form(...), password: str = Form(...)):
+    rate_key = f"{request.client.host}:{login}"
+    if await is_blocked(rate_key):
+        return templates.TemplateResponse(
+            "login.html", {"request": request, "error": "Слишком много попыток — подожди несколько минут."}
+        )
+
+    if login == settings.ADMIN_PANEL_LOGIN and password == settings.ADMIN_PANEL_PASSWORD:
+        await reset_rate_limit(rate_key)
+        request.session["authenticated"] = True
+        request.session["admin_role"] = AdminRole.FULL.value
+        request.session["admin_login"] = login
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    async with get_session() as session:
+        admin = (await session.execute(
+            select(AdminUser).where(AdminUser.login == login, AdminUser.is_active.is_(True))
+        )).scalar_one_or_none()
+
+    if admin is not None and verify_password(password, admin.password_hash):
+        await reset_rate_limit(rate_key)
+        request.session["authenticated"] = True
+        request.session["admin_role"] = admin.role.value
+        request.session["admin_login"] = admin.login
+        return RedirectResponse(url="/dashboard", status_code=302)
+
+    await register_failure(rate_key)
+    return templates.TemplateResponse(
+        "login.html", {"request": request, "error": "Неверный логин или пароль"}
+    )
+
+
+@app.get("/logout")
+async def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    return RedirectResponse(url="/dashboard")
+
+
+PAID_ORDER_STATUSES = (OrderStatus.PAID, OrderStatus.PROVISIONING, OrderStatus.ACTIVE)
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        orders = list((await session.execute(select(Order))).scalars())
+        paid_orders = [o for o in orders if o.status in PAID_ORDER_STATUSES]
+
+        revenue_orders = sum(float(o.price_charged) for o in paid_orders)
+
+        service_requests = list((await session.execute(select(ServiceRequest))).scalars())
+        paid_services = [r for r in service_requests if r.status == ServiceRequestStatus.PAID]
+        revenue_services = sum(float(r.final_price) for r in paid_services if r.final_price is not None)
+
+        orders_by_status = {s: 0 for s in OrderStatus}
+        for o in orders:
+            orders_by_status[o.status] += 1
+
+        # Уникальных покупателей — приблизительно: аккаунт сайта, пользователь бота
+        # и email гостя (без аккаунта) в заказах считаются как три разных категории,
+        # поэтому если один и тот же человек покупал и как гость, и залогинившись —
+        # он попадёт в счётчик дважды. Для точного числа нужна была бы отдельная
+        # таблица "клиент", которой пока в схеме нет.
+        site_customers = {o.website_account_id for o in orders if o.website_account_id}
+        bot_customers = {o.user_id for o in orders if o.user_id and not o.website_account_id}
+        guest_emails = {o.email for o in orders if o.email and not o.website_account_id and not o.user_id}
+        customers_count = len(site_customers) + len(bot_customers) + len(guest_emails)
+
+        # Топ пакетов и стран по выручке — на оплаченных заказах.
+        for o in paid_orders:
+            await session.refresh(o, attribute_names=["package"])
+        package_revenue: dict[int, dict] = {}
+        country_revenue: dict[str, float] = {}
+        for o in paid_orders:
+            pkg = o.package
+            entry = package_revenue.setdefault(pkg.id, {"title": pkg.title, "country": pkg.country_name, "revenue": 0.0, "count": 0})
+            entry["revenue"] += float(o.price_charged)
+            entry["count"] += 1
+            country_revenue[pkg.country_name] = country_revenue.get(pkg.country_name, 0.0) + float(o.price_charged)
+
+        top_packages = sorted(package_revenue.values(), key=lambda e: e["revenue"], reverse=True)[:8]
+        top_countries = sorted(country_revenue.items(), key=lambda kv: kv[1], reverse=True)[:8]
+
+        # Последние покупки — заказы eSIM и оплаченные заявки на услуги вместе, по дате.
+        recent_orders = sorted(orders, key=lambda o: o.created_at, reverse=True)[:15]
+        for o in recent_orders:
+            await session.refresh(o, attribute_names=["package"])
+            if o.website_account_id:
+                account = await session.get(WebsiteAccount, o.website_account_id)
+                o.customer_label = account.email if account else "—"
+            elif o.user_id:
+                bot_user = await session.get(User, o.user_id)
+                o.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+            else:
+                o.customer_label = o.email or "гость"
+
+        recent_services = sorted(paid_services, key=lambda r: r.paid_at or r.created_at, reverse=True)[:10]
+        for r in recent_services:
+            await session.refresh(r, attribute_names=["product"])
+            if r.website_account_id:
+                account = await session.get(WebsiteAccount, r.website_account_id)
+                r.customer_label = account.email if account else "—"
+            elif r.user_id:
+                bot_user = await session.get(User, r.user_id)
+                r.customer_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+            else:
+                r.customer_label = "—"
+
+        # Реферальная программа — сколько всего пришло по ссылкам и сколько
+        # бонусов реально начислено (только с момента появления ReferralBonus,
+        # см. комментарий в database/models.py — старые начисления не видны).
+        referred_site = (await session.execute(
+            select(func.count()).select_from(WebsiteAccount).where(WebsiteAccount.referred_by_id.is_not(None))
+        )).scalar_one()
+        referred_bot = (await session.execute(
+            select(func.count()).select_from(User).where(User.referred_by_id.is_not(None))
+        )).scalar_one()
+        bonuses = list((await session.execute(select(ReferralBonus).order_by(ReferralBonus.created_at.desc()))).scalars())
+        bonuses_total = sum(float(b.amount) for b in bonuses)
+        recent_bonuses = bonuses[:10]
+        for b in recent_bonuses:
+            if b.website_account_id:
+                acc = await session.get(WebsiteAccount, b.website_account_id)
+                b.referrer_label = acc.email if acc else "—"
+            elif b.user_id:
+                bu = await session.get(User, b.user_id)
+                b.referrer_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
+            else:
+                b.referrer_label = "—"
+
+        # Отзывы — просто сводка тут, полный список с удалением на /reviews.
+        reviews = list((await session.execute(select(Review))).scalars())
+        reviews_count = len(reviews)
+        reviews_avg = (sum(r.rating for r in reviews) / reviews_count) if reviews_count else 0
+
+    return templates.TemplateResponse(
+        "dashboard.html",
+        {
+            "request": request,
+            "revenue_orders": revenue_orders,
+            "revenue_services": revenue_services,
+            "revenue_total": revenue_orders + revenue_services,
+            "orders_total": len(orders),
+            "orders_by_status": orders_by_status,
+            "customers_count": customers_count,
+            "top_packages": top_packages,
+            "top_countries": top_countries,
+            "recent_orders": recent_orders,
+            "recent_services": recent_services,
+            "referred_total": referred_site + referred_bot,
+            "bonuses_total": bonuses_total,
+            "recent_bonuses": recent_bonuses,
+            "reviews_count": reviews_count,
+            "reviews_avg": reviews_avg,
+        },
+    )
+
+
+@app.get("/orders", response_class=HTMLResponse)
+async def orders_list(request: Request, status: str | None = None, _=Depends(require_login)):
+    async with get_session() as session:
+        query = select(Order).order_by(Order.created_at.desc())
+        if status:
+            query = query.where(Order.status == status)
+        result = await session.execute(query)
+        orders = list(result.scalars())
+        for order in orders:
+            await session.refresh(order, attribute_names=["user", "package"])
+
+    return templates.TemplateResponse(
+        "orders_list.html",
+        {
+            "request": request,
+            "orders": orders,
+            "statuses": list(OrderStatus),
+            "current_status": status,
+        },
+    )
+
+
+@app.get("/orders/{order_id}", response_class=HTMLResponse)
+async def order_detail(request: Request, order_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        order = await session.get(Order, order_id)
+        if order is None:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        await session.refresh(order, attribute_names=["user", "package"])
+        payment = (
+            await session.execute(select(Payment).where(Payment.order_id == order.id))
+        ).scalar_one_or_none()
+
+    return templates.TemplateResponse(
+        "order_detail.html",
+        {"request": request, "order": order, "statuses": list(OrderStatus), "payment": payment},
+    )
+
+
+@app.post("/orders/{order_id}/refund")
+async def refund_order(
+    request: Request, order_id: int, reason: str = Form(""), _=Depends(require_login)
+):
+    async with get_session() as session:
+        order = await session.get(Order, order_id)
+        if order is None:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        if order.status == OrderStatus.REFUNDED:
+            # Форма и так прячется на странице для уже возвращённых заказов, но
+            # это только на уровне интерфейса — отдельный прямой POST (например,
+            # через "назад" в браузере и повторную отправку формы) мог бы
+            # списать баланс во второй раз. Проверяем и на сервере тоже.
+            return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+        payment = (
+            await session.execute(select(Payment).where(Payment.order_id == order.id))
+        ).scalar_one_or_none()
+
+        order.status = OrderStatus.REFUNDED
+        order.refund_reason = reason
+
+        if payment is not None and payment.provider == PaymentProvider.BALANCE and order.website_account_id:
+            # Деньги при такой оплате никуда не уходили от нас — это была просто
+            # запись на внутреннем балансе аккаунта. Возврат тут однозначный и
+            # безопасный: просто начисляем обратно ту же сумму, без обращения к
+            # внешнему провайдеру (для Idram/OxaPay/Stripe так сделать нельзя —
+            # там деньги реально уходят наружу, и без подтверждённого документацией
+            # эндпоинта возврата дёргать их API вслепую рискованно).
+            account = await session.get(WebsiteAccount, order.website_account_id)
+            if account is not None:
+                account.balance = round(account.balance + float(order.price_charged), 2)
+                order.refund_reason = (reason + " " if reason else "") + \
+                    f"[Автоматически возвращено на баланс: ${float(order.price_charged):.2f}]"
+
+        await session.commit()
+
+    return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+
+@app.post("/orders/{order_id}/refresh-esimaccess")
+async def refresh_from_esimaccess(order_id: int, _=Depends(require_login)):
+    """
+    Ручной опрос esimaccess по orderNo — их же документация прямо советует так
+    делать как запасной путь, если вебхук ORDER_STATUS не настроен или ещё не
+    пришёл: "If this event is not received, fall back to polling the query endpoint."
+    """
+    async with get_session() as session:
+        order = await session.get(Order, order_id)
+        if order is None:
+            raise HTTPException(status_code=404, detail="Заказ не найден")
+        if not order.esimaccess_order_no:
+            raise HTTPException(status_code=400, detail="У заказа ещё нет esimaccess order id")
+
+        try:
+            esim_list = await esimaccess_client.query_esim(order_no=order.esimaccess_order_no)
+        except ESimAccessError as exc:
+            order.refund_reason = f"Ручная проверка: {exc}"
+            await session.commit()
+            return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+        if esim_list:
+            esim = esim_list[0]
+            order.iccid = esim.get("iccid")
+            order.esimaccess_esim_tran_no = esim.get("esimTranNo")
+            order.qr_code_data = esim.get("qrCodeUrl")
+            order.activation_instructions = esim.get("ac")
+            order.status = OrderStatus.ACTIVE
+            await session.commit()
+
+    return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+
+# telegram_id=0 никогда не встретится у настоящего пользователя Telegram (их ID всегда
+# положительные) — используем как служебную метку "это тестовый заказ из админки".
+TEST_USER_TELEGRAM_ID = 0
+
+
+@app.post("/orders/test-order")
+async def create_test_order(package_id: int = Form(...), _=Depends(require_login)):
+    """
+    Симулятор сделки — создаёт заказ, сразу помеченный оплаченным (минуя реальную
+    оплату), и по-настоящему отправляет его в esimaccess через тот же самый
+    _fulfill_order, что используют настоящие платежи. Это единственный способ
+    проверить, что интеграция с esimaccess реально работает (ключ верный, баланс
+    достаточный, create_order/query_esim отрабатывают), не разбираясь параллельно
+    с оплатой. ВНИМАНИЕ: списывает деньги с твоего реального баланса esimaccess.
+    """
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        result = await session.execute(select(User).where(User.telegram_id == TEST_USER_TELEGRAM_ID))
+        user = result.scalar_one_or_none()
+        if user is None:
+            user = User(telegram_id=TEST_USER_TELEGRAM_ID, full_name="Тестовый заказ (админка)")
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+        order = Order(
+            user_id=user.id,
+            package_id=package.id,
+            status=OrderStatus.PAID,  # сразу "оплачен" — тестируем именно esimaccess, не платёжку
+            price_charged=package.sell_price,
+            currency=package.currency,
+        )
+        session.add(order)
+        await session.commit()
+        await session.refresh(order)
+
+        await _fulfill_order(session, order)
+        order_id = order.id
+
+    return RedirectResponse(url=f"/orders/{order_id}", status_code=302)
+
+
+@app.get("/packages", response_class=HTMLResponse)
+async def packages_list(
+    request: Request, imported: int | None = None, updated: int | None = None, q: str = "", _=Depends(require_login)
+):
+    async with get_session() as session:
+        query = select(Package).order_by(Package.country_name, Package.title)
+        q = (q or "").strip()
+        if q:
+            like = f"%{q}%"
+            query = query.where(
+                Package.title.ilike(like) | Package.country_name.ilike(like)
+                | Package.country_code.ilike(like) | Package.esimaccess_package_code.ilike(like)
+            )
+        result = await session.execute(query)
+        packages = list(result.scalars())
+
+    return templates.TemplateResponse(
+        "packages_list.html",
+        {"request": request, "packages": packages, "imported": imported, "updated": updated, "q": q},
+    )
+
+
+@app.get("/packages/import", response_class=HTMLResponse)
+async def package_import_form(request: Request, _=Depends(require_login)):
+    return templates.TemplateResponse(
+        "package_import_form.html",
+        {
+            "request": request, "error": None, "imported": None,
+            "default_markup": settings.ESIMACCESS_DEFAULT_MARKUP_PERCENT,
+        },
+    )
+
+
+@app.post("/packages/import", response_class=HTMLResponse)
+async def package_import_submit(
+    request: Request,
+    country_code: str = Form(...),
+    country_name: str = Form(...),
+    markup_percent: float = Form(...),
+    is_regional: bool = Form(False),
+    _=Depends(require_login),
+):
+    country_code = country_code.strip().upper()
+    country_name = country_name.strip()
+
+    try:
+        remote_packages = await esimaccess_client.list_packages(location_code=country_code)
+    except ESimAccessError as exc:
+        return templates.TemplateResponse(
+            "package_import_form.html",
+            {
+                "request": request, "imported": None, "default_markup": markup_percent,
+                "error": f"esimaccess ответил ошибкой: {exc}. Путь/формат этого запроса не "
+                         f"подтверждён их документацией — возможно, угадан неверно.",
+            },
+        )
+    except Exception as exc:
+        return templates.TemplateResponse(
+            "package_import_form.html",
+            {
+                "request": request, "imported": None, "default_markup": markup_percent,
+                "error": f"Не удалось получить список пакетов: {exc}",
+            },
+        )
+
+    created, skipped, updated = 0, 0, 0
+    async with get_session() as session:
+        for item in remote_packages:
+            code = item.get("package_code")
+            cost_price = item.get("cost_price")
+            if not code or cost_price is None:
+                skipped += 1
+                continue
+
+            existing = (
+                await session.execute(select(Package).where(Package.esimaccess_package_code == code))
+            ).scalar_one_or_none()
+
+            sell_price = round(cost_price * (1 + markup_percent / 100), 2)
+
+            if existing is not None:
+                existing.cost_price = cost_price
+                existing.sell_price = sell_price
+                updated += 1
+                continue
+
+            package = Package(
+                country_code=item.get("country_code") or country_code,
+                country_name=country_name,
+                title=item.get("title") or code,
+                esimaccess_package_code=code,
+                data_amount_mb=item.get("data_amount_mb") or 0,
+                validity_days=item.get("validity_days") or 0,
+                cost_price=cost_price,
+                sell_price=sell_price,
+                currency="USD",
+                is_active=True,
+                is_regional=is_regional,
+            )
+            session.add(package)
+            created += 1
+
+        await session.commit()
+
+    return templates.TemplateResponse(
+        "package_import_form.html",
+        {
+            "request": request, "error": None, "default_markup": markup_percent,
+            "imported": {"created": created, "updated": updated, "skipped": skipped, "total": len(remote_packages)},
+        },
+    )
+
+
+@app.get("/packages/new", response_class=HTMLResponse)
+async def package_new_form(request: Request, _=Depends(require_login)):
+    return templates.TemplateResponse("package_form.html", {"request": request, "package": None})
+
+
+@app.post("/packages/new")
+async def package_create(
+    request: Request,
+    country_code: str = Form(...),
+    country_name: str = Form(...),
+    title: str = Form(...),
+    esimaccess_package_code: str = Form(...),
+    data_amount_mb: int = Form(...),
+    validity_days: int = Form(...),
+    cost_price: float = Form(...),
+    sell_price: float = Form(...),
+    currency: str = Form("USD"),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        package = Package(
+            country_code=country_code.strip().upper(),
+            country_name=country_name.strip(),
+            title=title.strip(),
+            esimaccess_package_code=esimaccess_package_code.strip(),
+            data_amount_mb=data_amount_mb,
+            validity_days=validity_days,
+            cost_price=cost_price,
+            sell_price=sell_price,
+            currency=currency.strip().upper(),
+            is_active=is_active,
+        )
+        session.add(package)
+        await session.commit()
+
+    return RedirectResponse(url="/packages", status_code=302)
+
+
+@app.get("/packages/{package_id}/edit", response_class=HTMLResponse)
+async def package_edit_form(request: Request, package_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+    return templates.TemplateResponse(
+        "package_form.html", {"request": request, "package": package}
+    )
+
+
+@app.post("/packages/{package_id}/edit")
+async def package_update(
+    request: Request,
+    package_id: int,
+    country_code: str = Form(...),
+    country_name: str = Form(...),
+    title: str = Form(...),
+    esimaccess_package_code: str = Form(...),
+    data_amount_mb: int = Form(...),
+    validity_days: int = Form(...),
+    cost_price: float = Form(...),
+    sell_price: float = Form(...),
+    currency: str = Form("USD"),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+
+        package.country_code = country_code.strip().upper()
+        package.country_name = country_name.strip()
+        package.title = title.strip()
+        package.esimaccess_package_code = esimaccess_package_code.strip()
+        package.data_amount_mb = data_amount_mb
+        package.validity_days = validity_days
+        package.cost_price = cost_price
+        package.sell_price = sell_price
+        package.currency = currency.strip().upper()
+        package.is_active = is_active
+        await session.commit()
+
+    return RedirectResponse(url="/packages", status_code=302)
+
+
+@app.post("/packages/{package_id}/delete")
+async def package_delete(package_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        package = await session.get(Package, package_id)
+        if package is None:
+            raise HTTPException(status_code=404, detail="Пакет не найден")
+        await session.delete(package)
+        await session.commit()
+
+    return RedirectResponse(url="/packages", status_code=302)
+
+
+@app.get("/categories", response_class=HTMLResponse)
+async def categories_list(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        result = await session.execute(select(Category).order_by(Category.sort_order, Category.id))
+        categories = list(result.scalars())
+
+    return templates.TemplateResponse(
+        "categories_list.html", {"request": request, "categories": categories}
+    )
+
+
+@app.get("/categories/new", response_class=HTMLResponse)
+async def category_new_form(request: Request, _=Depends(require_login)):
+    return templates.TemplateResponse("category_form.html", {"request": request, "category": None})
+
+
+@app.post("/categories/new")
+async def category_create(
+    request: Request,
+    slug: str = Form(...),
+    icon: str = Form("🛍"),
+    title_ru: str = Form(...),
+    title_hy: str = Form(...),
+    title_en: str = Form(...),
+    subtitle_ru: str = Form(""),
+    subtitle_hy: str = Form(""),
+    subtitle_en: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        category = Category(
+            slug=slug.strip().lower().replace(" ", "-"),
+            icon=icon.strip() or "🛍",
+            title_ru=title_ru.strip(),
+            title_hy=title_hy.strip(),
+            title_en=title_en.strip(),
+            subtitle_ru=subtitle_ru.strip() or None,
+            subtitle_hy=subtitle_hy.strip() or None,
+            subtitle_en=subtitle_en.strip() or None,
+            sort_order=sort_order,
+            is_active=is_active,
+        )
+        session.add(category)
+        await session.commit()
+
+    return RedirectResponse(url="/categories", status_code=302)
+
+
+@app.get("/categories/{category_id}/edit", response_class=HTMLResponse)
+async def category_edit_form(request: Request, category_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        category = await session.get(Category, category_id)
+        if category is None:
+            raise HTTPException(status_code=404, detail="Категория не найдена")
+
+    return templates.TemplateResponse(
+        "category_form.html", {"request": request, "category": category}
+    )
+
+
+@app.post("/categories/{category_id}/edit")
+async def category_update(
+    request: Request,
+    category_id: int,
+    slug: str = Form(...),
+    icon: str = Form("🛍"),
+    title_ru: str = Form(...),
+    title_hy: str = Form(...),
+    title_en: str = Form(...),
+    subtitle_ru: str = Form(""),
+    subtitle_hy: str = Form(""),
+    subtitle_en: str = Form(""),
+    sort_order: int = Form(0),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        category = await session.get(Category, category_id)
+        if category is None:
+            raise HTTPException(status_code=404, detail="Категория не найдена")
+
+        category.slug = slug.strip().lower().replace(" ", "-")
+        category.icon = icon.strip() or "🛍"
+        category.title_ru = title_ru.strip()
+        category.title_hy = title_hy.strip()
+        category.title_en = title_en.strip()
+        category.subtitle_ru = subtitle_ru.strip() or None
+        category.subtitle_hy = subtitle_hy.strip() or None
+        category.subtitle_en = subtitle_en.strip() or None
+        category.sort_order = sort_order
+        category.is_active = is_active
+        await session.commit()
+
+    return RedirectResponse(url="/categories", status_code=302)
+
+
+@app.post("/categories/{category_id}/delete")
+async def category_delete(category_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        category = await session.get(Category, category_id)
+        if category is None:
+            raise HTTPException(status_code=404, detail="Категория не найдена")
+
+        products_count = (
+            await session.execute(select(Product).where(Product.category_id == category_id))
+        ).scalars().first()
+        if products_count is not None:
+            return RedirectResponse(url="/categories?error=has_products", status_code=302)
+
+        await session.delete(category)
+        await session.commit()
+
+    return RedirectResponse(url="/categories", status_code=302)
+
+
+@app.get("/products", response_class=HTMLResponse)
+async def products_list(request: Request, category_id: int | None = None, _=Depends(require_login)):
+    async with get_session() as session:
+        query = select(Product).order_by(Product.category_id, Product.title_ru)
+        if category_id:
+            query = query.where(Product.category_id == category_id)
+        result = await session.execute(query)
+        products = list(result.scalars())
+        for p in products:
+            await session.refresh(p, attribute_names=["category"])
+
+        all_categories = list(
+            (await session.execute(select(Category).order_by(Category.sort_order, Category.id))).scalars()
+        )
+
+    return templates.TemplateResponse(
+        "products_list.html",
+        {"request": request, "products": products, "categories": all_categories, "current_category_id": category_id},
+    )
+
+
+@app.get("/products/new", response_class=HTMLResponse)
+async def product_new_form(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        categories = list(
+            (await session.execute(select(Category).order_by(Category.sort_order, Category.id))).scalars()
+        )
+    if not categories:
+        return RedirectResponse(url="/categories?error=need_category_first", status_code=302)
+
+    return templates.TemplateResponse(
+        "product_form.html", {"request": request, "product": None, "categories": categories}
+    )
+
+
+@app.post("/products/new")
+async def product_create(
+    request: Request,
+    category_id: int = Form(...),
+    title_ru: str = Form(...),
+    title_hy: str = Form(...),
+    title_en: str = Form(...),
+    description_ru: str = Form(""),
+    description_hy: str = Form(""),
+    description_en: str = Form(""),
+    price: str = Form(""),
+    currency: str = Form("USD"),
+    response_time_text: str = Form(""),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        product = Product(
+            category_id=category_id,
+            title_ru=title_ru.strip(),
+            title_hy=title_hy.strip(),
+            title_en=title_en.strip(),
+            description_ru=description_ru.strip() or None,
+            description_hy=description_hy.strip() or None,
+            description_en=description_en.strip() or None,
+            price=float(price) if price.strip() else None,
+            currency=currency.strip().upper(),
+            response_time_text=response_time_text.strip() or None,
+            is_active=is_active,
+        )
+        session.add(product)
+        await session.commit()
+
+    return RedirectResponse(url="/products", status_code=302)
+
+
+@app.get("/products/{product_id}/edit", response_class=HTMLResponse)
+async def product_edit_form(request: Request, product_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        categories = list(
+            (await session.execute(select(Category).order_by(Category.sort_order, Category.id))).scalars()
+        )
+
+    return templates.TemplateResponse(
+        "product_form.html", {"request": request, "product": product, "categories": categories}
+    )
+
+
+@app.post("/products/{product_id}/edit")
+async def product_update(
+    request: Request,
+    product_id: int,
+    category_id: int = Form(...),
+    title_ru: str = Form(...),
+    title_hy: str = Form(...),
+    title_en: str = Form(...),
+    description_ru: str = Form(""),
+    description_hy: str = Form(""),
+    description_en: str = Form(""),
+    price: str = Form(""),
+    currency: str = Form("USD"),
+    response_time_text: str = Form(""),
+    is_active: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+
+        product.category_id = category_id
+        product.title_ru = title_ru.strip()
+        product.title_hy = title_hy.strip()
+        product.title_en = title_en.strip()
+        product.description_ru = description_ru.strip() or None
+        product.description_hy = description_hy.strip() or None
+        product.description_en = description_en.strip() or None
+        product.price = float(price) if price.strip() else None
+        product.currency = currency.strip().upper()
+        product.response_time_text = response_time_text.strip() or None
+        product.is_active = is_active
+        await session.commit()
+
+    return RedirectResponse(url="/products", status_code=302)
+
+
+@app.post("/products/{product_id}/delete")
+async def product_delete(product_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        await session.delete(product)
+        await session.commit()
+
+    return RedirectResponse(url="/products", status_code=302)
+
+
+# --- Вопросы формы заказа (ProductQuestion) — см. комментарий в database/models.py ---
+
+QUESTION_TYPE_LABELS = {
+    QuestionType.YES_NO: "Да / нет",
+    QuestionType.TEXT: "Текст",
+    QuestionType.FILE: "Файл",
+}
+
+
+@app.get("/products/{product_id}/questions", response_class=HTMLResponse)
+async def product_questions_list(request: Request, product_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        product = await session.get(Product, product_id)
+        if product is None:
+            raise HTTPException(status_code=404, detail="Товар не найден")
+        questions = list((await session.execute(
+            select(ProductQuestion).where(ProductQuestion.product_id == product_id)
+            .order_by(ProductQuestion.position, ProductQuestion.id)
+        )).scalars())
+
+    return templates.TemplateResponse(
+        "product_questions.html",
+        {"request": request, "product": product, "questions": questions, "type_labels": QUESTION_TYPE_LABELS},
+    )
+
+
+@app.post("/products/{product_id}/questions/new")
+async def product_question_create(
+    product_id: int,
+    question_text_ru: str = Form(...),
+    question_text_hy: str = Form(...),
+    question_text_en: str = Form(...),
+    question_type: str = Form(...),
+    is_required: bool = Form(False),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        count = (await session.execute(
+            select(func.count()).select_from(ProductQuestion).where(ProductQuestion.product_id == product_id)
+        )).scalar_one()
+        session.add(ProductQuestion(
+            product_id=product_id,
+            question_text_ru=question_text_ru.strip(),
+            question_text_hy=question_text_hy.strip(),
+            question_text_en=question_text_en.strip(),
+            question_type=QuestionType(question_type), is_required=is_required, position=count,
+        ))
+        await session.commit()
+    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
+
+
+@app.post("/products/{product_id}/questions/{question_id}/delete")
+async def product_question_delete(product_id: int, question_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        q = await session.get(ProductQuestion, question_id)
+        if q is not None:
+            await session.delete(q)
+            await session.commit()
+    return RedirectResponse(url=f"/products/{product_id}/questions", status_code=302)
+
+
+# --- Промокоды ---
+
+@app.get("/promo-codes", response_class=HTMLResponse)
+async def promo_codes_list(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        result = await session.execute(select(PromoCode).order_by(PromoCode.created_at.desc()))
+        codes = list(result.scalars())
+    return templates.TemplateResponse("promo_codes_list.html", {"request": request, "codes": codes})
+
+
+@app.post("/promo-codes/new")
+async def promo_code_create(
+    request: Request,
+    code: str = Form(...),
+    bonus_amount: float = Form(...),
+    max_uses: str = Form(""),
+    expires_at: str = Form(""),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        normalized_code = code.strip().upper()
+        existing = (await session.execute(select(PromoCode).where(PromoCode.code == normalized_code))).scalar_one_or_none()
+        if existing is not None:
+            result = await session.execute(select(PromoCode).order_by(PromoCode.created_at.desc()))
+            codes = list(result.scalars())
+            return templates.TemplateResponse(
+                "promo_codes_list.html",
+                {"request": request, "codes": codes, "error": f"Промокод «{normalized_code}» уже существует."},
+            )
+
+        promo = PromoCode(
+            code=normalized_code,
+            bonus_amount=bonus_amount,
+            max_uses=int(max_uses) if max_uses.strip() else None,
+            expires_at=datetime.fromisoformat(expires_at) if expires_at.strip() else None,
+            is_active=True,
+        )
+        session.add(promo)
+        await session.commit()
+    return RedirectResponse(url="/promo-codes", status_code=302)
+
+
+@app.post("/promo-codes/{promo_id}/toggle")
+async def promo_code_toggle(promo_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        promo = await session.get(PromoCode, promo_id)
+        if promo is not None:
+            promo.is_active = not promo.is_active
+            await session.commit()
+    return RedirectResponse(url="/promo-codes", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Пользователи — два независимых аккаунта (см. комментарий в database/models.py):
+# User (бот/Mini App, вход по Telegram) и WebsiteAccount (сайт, email+пароль).
+# У каждого свой баланс, поэтому и правим их раздельно, но на одной странице.
+# Это прямое редактирование поля balance — без истории изменений (TopUp здесь
+# не создаём, т.к. TopUp привязан к платёжным провайдерам, а это не платёж).
+# ---------------------------------------------------------------------------
+USERS_PAGE_LIMIT = 100
+
+
+@app.get("/users", response_class=HTMLResponse)
+async def users_list(request: Request, q: str = "", _=Depends(require_login)):
+    q = (q or "").strip()
+    async with get_session() as session:
+        bot_query = select(User).order_by(User.id.desc())
+        site_query = select(WebsiteAccount).order_by(WebsiteAccount.id.desc())
+
+        if q:
+            like = f"%{q}%"
+            bot_query = bot_query.where(
+                (User.username.ilike(like))
+                | (User.full_name.ilike(like))
+                | (User.telegram_id.cast(String).ilike(like))
+            )
+            site_query = site_query.where(WebsiteAccount.email.ilike(like))
+
+        bot_users = list((await session.execute(bot_query.limit(USERS_PAGE_LIMIT))).scalars())
+        site_accounts = list((await session.execute(site_query.limit(USERS_PAGE_LIMIT))).scalars())
+
+    return templates.TemplateResponse(
+        "users_list.html",
+        {
+            "request": request,
+            "bot_users": bot_users,
+            "site_accounts": site_accounts,
+            "q": q,
+            "page_limit": USERS_PAGE_LIMIT,
+        },
+    )
+
+
+@app.post("/users/bot/{user_id}/balance")
+async def bot_user_balance_update(
+    request: Request, user_id: int, balance: float = Form(...), _=Depends(require_full_admin)
+):
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is not None:
+            user.balance = round(balance, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
+@app.post("/users/bot/{user_id}/balance/add")
+async def bot_user_balance_add(
+    request: Request, user_id: int, amount: float = Form(...), _=Depends(require_full_admin)
+):
+    """
+    Отдельно от bot_user_balance_update выше: то поле выставляет баланс РОВНО
+    в указанное число (оно и было причиной путаницы — предзаполнено текущим
+    значением, легко перепутать с "прибавить"). Это — однозначно прибавляет
+    сумму к тому, что уже есть, плюс можно вписать отрицательное число, чтобы
+    списать.
+    """
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is not None:
+            user.balance = round(user.balance + amount, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
+@app.post("/users/site/{account_id}/balance")
+async def site_account_balance_update(
+    request: Request, account_id: int, balance: float = Form(...), _=Depends(require_full_admin)
+):
+    async with get_session() as session:
+        account = await session.get(WebsiteAccount, account_id)
+        if account is not None:
+            account.balance = round(balance, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
+@app.post("/users/site/{account_id}/balance/add")
+async def site_account_balance_add(
+    request: Request, account_id: int, amount: float = Form(...), _=Depends(require_full_admin)
+):
+    """См. bot_user_balance_add выше — тот же принцип, для аккаунтов сайта."""
+    async with get_session() as session:
+        account = await session.get(WebsiteAccount, account_id)
+        if account is not None:
+            account.balance = round(account.balance + amount, 2)
+            await session.commit()
+    q = request.query_params.get("q", "")
+    return RedirectResponse(url=f"/users?q={q}", status_code=302)
+
+
+# --- Массовый импорт всего каталога esimaccess разом ---
+# Снимок каталога (esimaccess_catalog_snapshot.json) сделан вручную через официальный
+# eSIMAccess MCP-сервер (get_all_data_packages без фильтра) — актуален на дату снятия.
+# Это НЕ живой запрос к их API — если каталог у них обновится, снимок нужно будет
+# пересобрать заново. Зато не зависит от того, правильно ли угадан путь эндпоинта
+# в app/services/esimaccess.py (он никогда не был подтверждён документацией).
+
+CATALOG_SNAPSHOT_PATH = Path(__file__).parent / "esimaccess_catalog_snapshot.json"
+
+
+@app.get("/packages/bulk-import", response_class=HTMLResponse)
+async def bulk_import_form(request: Request, _=Depends(require_login)):
+    with open(CATALOG_SNAPSHOT_PATH, encoding="utf-8") as f:
+        catalog = json.load(f)
+    countries = sorted(set(p["country_code"] for p in catalog if not p["is_regional"]))
+    regions = sorted(set(p["country_code"] for p in catalog if p["is_regional"]))
+    return templates.TemplateResponse(
+        "bulk_import_form.html",
+        {
+            "request": request,
+            "total_packages": len(catalog),
+            "country_count": len(countries),
+            "region_count": len(regions),
+            "default_markup": settings.ESIMACCESS_DEFAULT_MARKUP_PERCENT,
+        },
+    )
+
+
+@app.post("/packages/bulk-import")
+async def bulk_import_submit(
+    request: Request,
+    markup_percent: float = Form(...),
+    _=Depends(require_login),
+):
+    with open(CATALOG_SNAPSHOT_PATH, encoding="utf-8") as f:
+        catalog = json.load(f)
+
+    BATCH_SIZE = 200  # коммитим партиями, а не всё одним гигантским запросом —
+    # так надёжнее при 3000+ строках (меньше риск таймаута/лимитов на размер запроса,
+    # и если что-то упадёт на середине, часть уже сохранённых пакетов не потеряется).
+
+    created = 0
+    updated = 0
+
+    async with get_session() as session:
+        existing = {
+            p.esimaccess_package_code: p
+            for p in (await session.execute(select(Package))).scalars()
+        }
+
+    for batch_start in range(0, len(catalog), BATCH_SIZE):
+        batch = catalog[batch_start:batch_start + BATCH_SIZE]
+        async with get_session() as session:
+            for item in batch:
+                cost_price = item["price_usd"]
+                sell_price = round(cost_price * (1 + markup_percent / 100), 2)
+                code = item["package_code"]
+
+                if code in existing:
+                    pkg = await session.get(Package, existing[code].id)
+                    pkg.cost_price = cost_price
+                    pkg.sell_price = sell_price
+                    pkg.data_amount_mb = item["data_amount_mb"]
+                    pkg.validity_days = item["validity_days"]
+                    pkg.country_code = item["country_code"]
+                    pkg.country_name = item["country_name"]
+                    pkg.is_regional = item["is_regional"]
+                    updated += 1
+                else:
+                    session.add(Package(
+                        esimaccess_package_code=code,
+                        country_code=item["country_code"],
+                        country_name=item["country_name"],
+                        title=f"{item['data_amount_mb'] / 1024:.1f} ГБ / {item['validity_days']} дн.".replace(".0 ", " "),
+                        data_amount_mb=item["data_amount_mb"],
+                        validity_days=item["validity_days"],
+                        cost_price=cost_price,
+                        sell_price=sell_price,
+                        currency="USD",
+                        is_active=True,
+                        is_regional=item["is_regional"],
+                    ))
+                    created += 1
+
+            await session.commit()
+
+    return RedirectResponse(url=f"/packages?imported={created}&updated={updated}", status_code=302)
+
+# ---------------------------------------------------------------------------
+# Заявки на услуги (ServiceRequest) — форма вместо чата, см. models.py и
+# app/webapp/shop.py (сайт). Тут админ смотрит ответы, прикладывает файл
+# (ваучер/билет), подтверждает цену и переводит в "Готово" — клиенту
+# приходит уведомление со ссылкой на оплату с баланса.
+# ---------------------------------------------------------------------------
+
+SERVICE_STATUS_LABELS = {
+    ServiceRequestStatus.SUBMITTED: "На рассмотрении",
+    ServiceRequestStatus.READY: "Готово к оплате",
+    ServiceRequestStatus.PAID: "Оплачено",
+    ServiceRequestStatus.CANCELLED: "Отклонено",
+}
+
+
+@app.get("/service-requests", response_class=HTMLResponse)
+async def service_requests_list(request: Request, status: str | None = None, _=Depends(require_login)):
+    async with get_session() as session:
+        query = select(ServiceRequest).order_by(ServiceRequest.created_at.desc())
+        if status:
+            query = query.where(ServiceRequest.status == ServiceRequestStatus(status))
+        rows = list((await session.execute(query)).scalars())
+        for r in rows:
+            await session.refresh(r, attribute_names=["product"])
+            if r.website_account_id:
+                r.owner_label = (await session.get(WebsiteAccount, r.website_account_id)).email
+            elif r.user_id:
+                bot_user = await session.get(User, r.user_id)
+                r.owner_label = bot_user.full_name or bot_user.username or str(bot_user.telegram_id)
+            else:
+                r.owner_label = "—"
+
+    return templates.TemplateResponse(
+        "service_requests_list.html",
+        {
+            "request": request, "requests": rows, "statuses": list(ServiceRequestStatus),
+            "status_labels": SERVICE_STATUS_LABELS, "current_status": status,
+        },
+    )
+
+
+@app.get("/service-requests/{request_id}", response_class=HTMLResponse)
+async def service_request_detail(request: Request, request_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["answers", "product"])
+        owner_label = "—"
+        if sr.website_account_id:
+            account = await session.get(WebsiteAccount, sr.website_account_id)
+            owner_label = account.email if account else "—"
+        elif sr.user_id:
+            bot_user = await session.get(User, sr.user_id)
+            owner_label = (bot_user.full_name or bot_user.username or str(bot_user.telegram_id)) if bot_user else "—"
+
+    return templates.TemplateResponse(
+        "service_request_detail.html",
+        {
+            "request": request, "sr": sr, "owner_label": owner_label,
+            "status_labels": SERVICE_STATUS_LABELS,
+        },
+    )
+
+
+@app.post("/service-requests/{request_id}/ready")
+async def service_request_mark_ready(
+    request_id: int,
+    final_price: float = Form(...),
+    admin_note: str = Form(""),
+    deliverable: UploadFile | None = File(None),
+    _=Depends(require_login),
+):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["product"])
+
+        if deliverable is not None and deliverable.filename:
+            saved = await save_service_file(deliverable, sr.id)
+            sr.deliverable_path = saved["url"]
+            sr.deliverable_filename = saved["filename"]
+            # Байты — в базу, а не только на локальный диск: этот процесс
+            # (админка) и тот, что реально отдаёт файл клиенту (сайт/бот) —
+            # два разных контейнера на Railway с разными дисками.
+            sr.deliverable_data = saved["data"]
+            sr.deliverable_content_type = saved["content_type"]
+
+        sr.final_price = final_price
+        sr.admin_note = admin_note.strip() or None
+        sr.status = ServiceRequestStatus.READY
+        sr.ready_at = datetime.utcnow()
+        await session.commit()
+
+        await notify(
+            session, website_account_id=sr.website_account_id, user_id=sr.user_id,
+            type=NotificationType.ORDER,
+            title="Заявка готова",
+            body=f"«{sr.product.title('ru')}» готова — можно оплатить с баланса (${final_price:.2f}).",
+            link_url=f"/shop/account/service-requests/{sr.id}",
+        )
+
+    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
+
+
+@app.post("/service-requests/{request_id}/cancel")
+async def service_request_cancel(request_id: int, admin_note: str = Form(""), _=Depends(require_login)):
+    async with get_session() as session:
+        sr = await session.get(ServiceRequest, request_id)
+        if sr is None:
+            raise HTTPException(status_code=404, detail="Заявка не найдена")
+        await session.refresh(sr, attribute_names=["product"])
+        sr.status = ServiceRequestStatus.CANCELLED
+        sr.admin_note = admin_note.strip() or sr.admin_note
+        await session.commit()
+
+        # Раньше клиент никак не узнавал, что заявку отклонили, и тем более —
+        # почему (форма отклонения даже не спрашивала причину). Теперь причина
+        # обязательна на уровне формы (см. шаблон) и уходит клиенту уведомлением,
+        # плюс видна прямо в деталях заявки (та же логика, что и раньше для
+        # готовой/оплаченной — см. shop.py/products.py: admin_note виден клиенту
+        # при paid ИЛИ cancelled, а не только при paid).
+        await notify(
+            session, website_account_id=sr.website_account_id, user_id=sr.user_id,
+            type=NotificationType.ORDER,
+            title="Заявка отклонена",
+            body=f"«{sr.product.title('ru')}» отклонена."
+                 + (f" Причина: {sr.admin_note}" if sr.admin_note else " Причина не указана — уточни в поддержке."),
+            link_url=f"/shop/account/service-requests/{sr.id}",
+        )
+
+    return RedirectResponse(url=f"/service-requests/{request_id}", status_code=302)
+
+
+# ---------------------------------------------------------------------------
+# Другие админы (AdminUser) — см. комментарий в database/models.py. Доступно
+# только полному админу (require_full_admin) — иначе support мог бы себе же
+# выдать полный доступ.
+# ---------------------------------------------------------------------------
+
+@app.get("/admins", response_class=HTMLResponse)
+async def admins_list(request: Request, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admins = list((await session.execute(select(AdminUser).order_by(AdminUser.created_at.desc()))).scalars())
+    return templates.TemplateResponse("admins_list.html", {"request": request, "admins": admins})
+
+
+@app.post("/admins/new")
+async def admin_create(
+    login: str = Form(...), password: str = Form(...), role: str = Form(...), _=Depends(require_full_admin)
+):
+    async with get_session() as session:
+        existing = (await session.execute(select(AdminUser).where(AdminUser.login == login.strip()))).scalar_one_or_none()
+        if existing is None:
+            session.add(AdminUser(
+                login=login.strip(), password_hash=hash_password(password), role=AdminRole(role),
+            ))
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+@app.post("/admins/{admin_id}/toggle")
+async def admin_toggle(admin_id: int, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admin = await session.get(AdminUser, admin_id)
+        if admin is not None:
+            admin.is_active = not admin.is_active
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+@app.post("/admins/{admin_id}/delete")
+async def admin_delete(admin_id: int, _=Depends(require_full_admin)):
+    async with get_session() as session:
+        admin = await session.get(AdminUser, admin_id)
+        if admin is not None:
+            await session.delete(admin)
+            await session.commit()
+    return RedirectResponse(url="/admins", status_code=302)
+
+
+# --- Отзывы (Review) — просмотр и удаление спама/оскорблений ---
+
+@app.get("/reviews", response_class=HTMLResponse)
+async def reviews_list(request: Request, _=Depends(require_login)):
+    async with get_session() as session:
+        reviews = list((await session.execute(select(Review).order_by(Review.created_at.desc()))).scalars())
+        for r in reviews:
+            if r.website_account_id:
+                acc = await session.get(WebsiteAccount, r.website_account_id)
+                r.owner_label = acc.email if acc else "—"
+            elif r.user_id:
+                bu = await session.get(User, r.user_id)
+                r.owner_label = (bu.full_name or bu.username or str(bu.telegram_id)) if bu else "—"
+            else:
+                r.owner_label = "—"
+
+    return templates.TemplateResponse("reviews_list.html", {"request": request, "reviews": reviews})
+
+
+@app.post("/reviews/{review_id}/delete")
+async def review_delete(review_id: int, _=Depends(require_login)):
+    async with get_session() as session:
+        review = await session.get(Review, review_id)
+        if review is not None:
+            await session.delete(review)
+            await session.commit()
+    return RedirectResponse(url="/reviews", status_code=302)

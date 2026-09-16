@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Пакеты — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/dashboard">Дашборд</a>
+    <a href="/orders">Заказы</a>
+    <a href="/packages" class="active">Пакеты</a>
+    <a href="/products">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <h2>Пакеты каталога</h2>
+  {% if imported is not none %}
+  <div class="card" style="border-color: var(--accent-green, #2ecc71);">
+    ✅ Импорт завершён: добавлено {{ imported }}, обновлено {{ updated }} пакетов.
+  </div>
+  {% endif %}
+  <p class="status-label" style="margin-bottom:16px;">
+    Кнопка «⚡ Импортировать ВЕСЬ каталог разом» заводит все пакеты из снимка
+    каталога esimaccess одним нажатием (3046 тарифов, 234 страны/региона).
+    Снимок сделан вручную через официальный MCP-сервер esimaccess — если их
+    каталог поменяется, снимок нужно будет пересобрать заново.
+  </p>
+
+  <p>
+    <a class="btn" href="/packages/new">+ Добавить пакет</a>
+    <a class="btn secondary" href="/packages/import">⬇️ Импорт из esimaccess</a>
+    <a class="btn" href="/packages/bulk-import">⚡ Импортировать ВЕСЬ каталог разом</a>
+  </p>
+  <p class="status-label" style="margin-bottom:16px;">
+    Кнопка «🧪 Тест» у пакета создаёт тестовый заказ, сразу помеченный оплаченным,
+    и отправляет его в esimaccess по-настоящему (спишет с твоего баланса) — так
+    можно проверить, что интеграция реально работает, не разбираясь пока с оплатой.
+  </p>
+
+  <form method="get" action="/packages" style="margin-bottom:16px; max-width:420px;">
+    <input type="text" name="q" value="{{ q or '' }}" placeholder="Поиск: страна, название, код esimaccess"
+           style="width:100%; padding:10px 12px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--text); font-family:inherit; font-size:14px;">
+  </form>
+  {% if q %}<p class="status-label" style="margin-bottom:12px;">Найдено: {{ packages|length }}</p>{% endif %}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Страна</th>
+        <th>Название</th>
+        <th>Код esimaccess</th>
+        <th>Закупка</th>
+        <th>Цена клиенту</th>
+        <th>Активен</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for package in packages %}
+      <tr onclick="location.href='/packages/{{ package.id }}/edit'">
+        <td>{{ package.country_name }} <span class="status-label">({{ package.country_code }})</span></td>
+        <td>{{ package.title }}</td>
+        <td class="mono">{{ package.esimaccess_package_code }}</td>
+        <td>{{ package.cost_price }} {{ package.currency }}</td>
+        <td>{{ package.sell_price }} {{ package.currency }}</td>
+        <td>{{ "Да" if package.is_active else "Нет" }}</td>
+        <td onclick="event.stopPropagation()">
+          <form method="post" action="/orders/test-order" onsubmit="return confirm('Создать тестовый заказ и реально отправить его в esimaccess (спишет деньги с баланса)?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="package_id" value="{{ package.id }}">
+            <button class="btn" type="submit" style="padding:4px 10px; font-size:12px;">🧪 Тест</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="status-label">Пакетов пока нет — добавь первый.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

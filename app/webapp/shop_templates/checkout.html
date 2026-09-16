@@ -6,14 +6,22 @@
     <p><a href="/shop/country/{{ package.country_code }}" class="hint">{{ t("back_to_plans") }}</a></p>
     <h2 class="section-title">{{ t("checkout_title") }}</h2>
 
+    {% if error %}<p class="error" style="margin-bottom:16px;">{{ error }}</p>{% endif %}
+
     <div class="card">
-      <div style="display:flex; justify-content:space-between;">
-        <span>{{ package.country_name }} — {{ package.title }}</span>
-        <strong>{{ package.sell_price }} {{ package.currency }}</strong>
+      <div class="summary-row">
+        <span class="label">{{ t("order_plan_label") }}</span>
+        <span class="value">{{ package.country_name }} — {{ package.title }}</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">{{ t("order_validity_label") }}</span>
+        <span class="value">{{ package.validity_days }} {{ t("days_short") }}</span>
+      </div>
+      <div class="summary-row total">
+        <span class="label">{{ t("order_total_label") }}</span>
+        <span class="value">{{ package.sell_price }} {{ package.currency }}</span>
       </div>
     </div>
-
-    {% if error %}<p class="error">{{ error }}</p>{% endif %}
 
     <p class="hint" style="margin-bottom:16px;">{{ t("logged_in_as") }} <strong>{{ account.email }}</strong></p>
 
@@ -31,7 +39,14 @@
     <form method="post" action="/shop/checkout/{{ package.id }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
       {% if can_pay_from_balance %}
-      <button class="btn block" type="submit" name="method" value="balance">{{ t("checkout_pay_balance") }} (${{ "%.2f"|format(balance) }})</button>
+      <div class="card" style="display:flex; align-items:center; gap:12px; margin-bottom:14px;">
+        <span class="icon" style="display:flex; color:var(--accent-ink);"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></span>
+        <span style="flex:1; font-size:14px;">
+          {{ t("checkout_pay_balance") }}
+          <span class="sublabel" style="display:block; font-size:12.5px; color:var(--text-secondary);">{{ t("balance_current") }}: ${{ "%.2f"|format(balance) }}</span>
+        </span>
+      </div>
+      <button class="btn block" type="submit" name="method" value="balance">{{ t("checkout_pay_balance") }} — ${{ "%.2f"|format(package.sell_price) }}</button>
       {% else %}
       <p class="hint" style="margin-bottom:10px;">{{ t("checkout_balance_low") }} ${{ "%.2f"|format(balance) }}</p>
       <a class="btn block" href="/shop/account/balance">{{ t("checkout_topup_cta") }}</a>

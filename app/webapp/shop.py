@@ -251,8 +251,21 @@ async def _fetch_country_list(session):
     ).all()
     ratings = {code: (round(float(avg), 1), count) for code, avg, count in rating_rows}
 
+    price_rows = (
+        await session.execute(
+            select(Package.country_code, func.min(Package.sell_price))
+            .where(Package.is_active.is_(True), Package.is_regional.is_(False))
+            .group_by(Package.country_code)
+        )
+    ).all()
+    from_prices = {code: float(price) for code, price in price_rows}
+
     return [
-        {"code": c, "name": n, "avg_rating": ratings.get(c, (None, 0))[0], "review_count": ratings.get(c, (None, 0))[1]}
+        {
+            "code": c, "name": n,
+            "avg_rating": ratings.get(c, (None, 0))[0], "review_count": ratings.get(c, (None, 0))[1],
+            "from_price": from_prices.get(c),
+        }
         for c, n in rows
     ]
 

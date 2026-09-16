@@ -19,11 +19,21 @@
 
     <div id="country-list" class="country-grid">
       {% for c in countries %}
-      <a class="country-tile country-row" href="/shop/country/{{ c.code }}" data-name="{{ c.name|lower }}" data-code="{{ c.code }}" style="--hue: {{ c.code|hue }};">
-        <span class="flag">{{ c.code|flag }}</span>
-        <div>
-          <div class="name">{{ c.name }}</div>
-          <div class="price">{% if c.review_count %}★ {{ c.avg_rating }}{% endif %}</div>
+      <a class="destination-ticket" href="/shop/country/{{ c.code }}" data-name="{{ c.name|lower }}" data-code="{{ c.code }}">
+        <div class="ticket-top">
+          <span class="flag">{{ c.code|flag }}</span>
+          {% if c.review_count %}<span class="ticket-badge">★ {{ c.avg_rating }}</span>{% endif %}
+        </div>
+        <div style="padding: 0 18px 20px; margin-top:-12px;">
+          <div class="ticket-name">{{ c.name }}</div>
+        </div>
+        <div class="ticket-perf"></div>
+        <div class="ticket-stub">
+          <div>
+            <span class="ticket-price-label">{{ t("region_from") }}</span>
+            <span class="ticket-price">{% if c.from_price %}${{ "%.2f"|format(c.from_price) }}{% else %}—{% endif %}</span>
+          </div>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
         </div>
       </a>
       {% else %}
@@ -68,7 +78,7 @@
   // Если пришли из поля поиска на главной (?q=...), подставляем значение и сразу фильтруем.
   var presetQuery = new URLSearchParams(window.location.search).get("q");
   if (presetQuery) { search.value = presetQuery; }
-  var rows = Array.prototype.slice.call(document.querySelectorAll(".country-row"));
+  var rows = Array.prototype.slice.call(document.querySelectorAll(".destination-ticket"));
   var buttons = Array.prototype.slice.call(document.querySelectorAll(".region-filter-btn"));
   var noResults = document.getElementById("no-results");
   var activeRegion = "all";

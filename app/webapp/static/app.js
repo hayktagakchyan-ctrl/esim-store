@@ -382,7 +382,7 @@ async function openCountry(country) {
       row.className = "package-row";
       const gb = (p.data_amount_mb / 1024).toFixed(1).replace(/\.0$/, "");
       row.innerHTML = `
-        <div>${p.title || `${gb} GB · ${p.validity_days}d`}</div>
+        <div class="package-row-main">${p.title || `${gb} GB · ${p.validity_days}d`}</div>
         <div class="price">${p.price} ${p.currency}</div>
       `;
       row.addEventListener("click", () => openCheckout(p));

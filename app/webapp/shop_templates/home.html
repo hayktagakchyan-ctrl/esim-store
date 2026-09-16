@@ -3,40 +3,45 @@
 {% block body %}
 
 <section class="hero-v2">
-  <div class="container narrow">
-    <div class="eyebrow-badge">{{ t("hero_badge") }}</div>
-    <h1>{{ t("hero_title") }}</h1>
-    <p>{{ t("hero_subtitle") }}</p>
+  <div class="container">
+    <div class="hero-grid">
+      <div>
+        <p class="hero-eyebrow-line">{{ t("hero_badge") }}</p>
+        <h1>{{ t("hero_title") }}</h1>
+        <p>{{ t("hero_subtitle") }}</p>
 
-    <form class="search-cta" action="/shop/catalog" method="get">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <input class="search-cta-input" type="text" name="q" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
-      <button class="btn" type="submit">{{ t("hero_cta") }}</button>
-    </form>
+        <form class="search-cta" action="/shop/catalog" method="get">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input class="search-cta-input" type="text" name="q" placeholder="{{ t('search_placeholder') }}" autocomplete="off">
+          <button class="btn" type="submit">{{ t("hero_cta") }}</button>
+        </form>
 
-    <div class="promo-strip" style="justify-content:center; margin-top:20px;">
-      <div class="promo-pill">🌍 {{ countries|length }}+ {{ t("filter_all")|lower }}</div>
-      <div class="promo-pill">⚡ {{ t("feature_instant_title") }}</div>
-      <div class="promo-pill">💳 {{ t("feature_payment_title") }}</div>
+        <div class="promo-strip" style="margin-top:20px;">
+          <div class="promo-pill"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg> {{ countries|length }}+ {{ t("filter_all")|lower }}</div>
+          <div class="promo-pill"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg> {{ t("feature_instant_title") }}</div>
+          <div class="promo-pill"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg> {{ t("feature_payment_title") }}</div>
+        </div>
+      </div>
+      <div class="hero-orb" aria-hidden="true"></div>
     </div>
   </div>
 </section>
 
 <section class="section">
   <div class="container">
-    <div class="features">
-      <div class="feature-card">
-        <div class="icon">🌍</div>
+    <div class="feature-row">
+      <div class="feature-stat">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20"/></svg></div>
         <h3>{{ t("feature_countries_title") }}</h3>
         <p>{{ t("feature_countries_desc") }}</p>
       </div>
-      <div class="feature-card">
-        <div class="icon">⚡</div>
+      <div class="feature-stat">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg></div>
         <h3>{{ t("feature_instant_title") }}</h3>
         <p>{{ t("feature_instant_desc") }}</p>
       </div>
-      <div class="feature-card">
-        <div class="icon">💳</div>
+      <div class="feature-stat">
+        <div class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg></div>
         <h3>{{ t("feature_payment_title") }}</h3>
         <p>{{ t("feature_payment_desc") }}</p>
       </div>
@@ -73,13 +78,23 @@
     </div>
     <div class="country-grid">
     {% for c in countries[:8] %}
-    <a class="country-tile {{ 'accent' if c.review_count }}" href="/shop/country/{{ c.code }}" style="--hue: {{ c.code|hue }};">
-      <span class="flag">{{ c.code|flag }}</span>
-      <div>
-        <div class="name">{{ c.name }}</div>
-        {% if c.review_count %}<div class="top-pick-label">{{ t("home_top_pick") }}</div>{% endif %}
+    <a class="destination-ticket" href="/shop/country/{{ c.code }}">
+      <div class="ticket-top">
+        <span class="flag">{{ c.code|flag }}</span>
+        {% if c.review_count %}<span class="ticket-badge">★ {{ c.avg_rating }}</span>{% endif %}
       </div>
-      {% if c.review_count %}<div class="tile-rating">★ {{ c.avg_rating }}</div>{% endif %}
+      <div style="padding: 0 18px 20px; margin-top:-12px;">
+        <div class="ticket-name">{{ c.name }}</div>
+        {% if c.review_count %}<div class="ticket-meta">{{ t("home_top_pick") }}</div>{% endif %}
+      </div>
+      <div class="ticket-perf"></div>
+      <div class="ticket-stub">
+        <div>
+          <span class="ticket-price-label">{{ t("region_from") }}</span>
+          <span class="ticket-price">{% if c.from_price %}${{ "%.2f"|format(c.from_price) }}{% else %}—{% endif %}</span>
+        </div>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>
+      </div>
     </a>
     {% else %}
     <p class="hint" style="text-align:center;">—</p>

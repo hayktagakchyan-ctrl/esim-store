@@ -2,9 +2,9 @@
   document.addEventListener("DOMContentLoaded", function () {
     var shell = document.getElementById("app-shell");
     var openBtn = document.getElementById("sidebar-open");
+    var openAccountBtn = document.getElementById("sidebar-open-account");
     var closeBtn = document.getElementById("sidebar-close");
     var backdrop = document.getElementById("sidebar-backdrop");
-    var collapseBtn = document.getElementById("sidebar-collapse");
     var sidebar = document.getElementById("sidebar");
 
     function openSidebar() {
@@ -15,6 +15,7 @@
     }
 
     if (openBtn) openBtn.addEventListener("click", openSidebar);
+    if (openAccountBtn) openAccountBtn.addEventListener("click", openSidebar);
     if (closeBtn) closeBtn.addEventListener("click", closeSidebar);
     if (backdrop) backdrop.addEventListener("click", closeSidebar);
     if (sidebar) {
@@ -26,25 +27,17 @@
       if (e.key === "Escape") closeSidebar();
     });
 
-    // Свёрнутое состояние (иконки без подписей) — только для широких экранов, запоминаем выбор
-    if (collapseBtn) {
-      var collapsed = localStorage.getItem("sidebar_collapsed") === "1";
-      if (collapsed) shell.classList.add("sidebar-collapsed");
-      collapseBtn.addEventListener("click", function () {
-        var isCollapsed = shell.classList.toggle("sidebar-collapsed");
-        localStorage.setItem("sidebar_collapsed", isCollapsed ? "1" : "0");
-      });
-    }
-
-    // Клик по пункту поддержки — отправляем скрытую форму создания чата
-    var supportLink = document.getElementById("support-nav-link");
+    // Клик по пункту поддержки (в сайдбаре и в верхней навигации) — отправляем
+    // скрытую форму создания чата вместо перехода по "#".
     var supportForm = document.getElementById("start-support-form");
-    if (supportLink && supportForm) {
-      supportLink.addEventListener("click", function (e) {
-        e.preventDefault();
-        supportForm.submit();
-      });
-    }
+    [document.getElementById("support-nav-link"), document.getElementById("support-nav-link-top"), document.getElementById("order-help-link")].forEach(function (link) {
+      if (link && supportForm) {
+        link.addEventListener("click", function (e) {
+          e.preventDefault();
+          supportForm.submit();
+        });
+      }
+    });
 
     // Показать/скрыть пароль — кнопка-глазок рядом с полем (регистрация, вход,
     // смена/сброс пароля). data-target — id поля, которое переключаем.

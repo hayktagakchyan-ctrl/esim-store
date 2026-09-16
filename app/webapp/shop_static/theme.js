@@ -1,8 +1,11 @@
 (function () {
   function getPreferredTheme() {
+    // Тёмная тема — фирменный дефолт бренда (premium tech), не системная
+    // подстройка: открывается тёмной даже для посетителя со светлой темой
+    // ОС, пока человек сам не переключит — тогда выбор запоминается.
     const saved = localStorage.getItem("site_theme");
     if (saved === "light" || saved === "dark") return saved;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return "dark";
   }
 
   function applyTheme(theme) {

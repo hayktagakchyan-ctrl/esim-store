@@ -4,14 +4,18 @@
 <section class="section">
   <div class="container narrow">
     <h2 class="section-title">{{ t("services_title") }}</h2>
+    <div class="list">
     {% for c in categories %}
     <a class="row" href="/shop/services/{{ c.slug }}">
-      <span class="name">{{ c.icon }} {{ c.title }}</span>
+      <span class="flag">{{ c.icon }}</span>
+      <div style="flex:1;"><span class="name">{{ c.title }}</span></div>
       <span class="meta">›</span>
     </a>
-    {% else %}
-    <p class="hint" style="text-align:center;">{{ t("services_empty") }}</p>
     {% endfor %}
+    </div>
+    {% if not categories %}
+    <p class="hint" style="text-align:center;">{{ t("services_empty") }}</p>
+    {% endif %}
   </div>
 </section>
 {% endblock %}

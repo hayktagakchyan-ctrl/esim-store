@@ -34,7 +34,7 @@
 
     {% if sr.status == "ready" %}
     <div class="card" style="text-align:center;">
-      <p style="font-size:20px; font-weight:700; margin-bottom:12px;">{{ sr.final_price }} {{ sr.currency }}</p>
+      <p style="font-family:var(--font-mono); font-variant-numeric:tabular-nums; font-size:22px; font-weight:600; margin-bottom:12px;">{{ "%.2f"|format(sr.final_price) }} {{ sr.currency }}</p>
       {% if balance >= sr.final_price %}
       <form method="post" action="/shop/account/service-requests/{{ sr.id }}/pay">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}{{ "Редактировать товар" if product else "Новый товар" }} — Админка{% endblock %}
+{% block body %}
+<div class="topbar">
+  <div class="brand"><span class="dot"></span> eSIM Store</div>
+  <nav class="topnav">
+    <a href="/dashboard">Дашборд</a>
+    <a href="/orders">Заказы</a>
+    <a href="/packages">Пакеты</a>
+    <a href="/products" class="active">Товары</a>
+    <a href="/categories">Категории</a>
+    <a href="/promo-codes">Промокоды</a>
+    <a href="/users">Пользователи</a>
+    <a href="/service-requests">Заявки</a>
+    <a href="/reviews">Отзывы</a>
+    {% if is_full_admin %}<a href="/admins">Админы</a>{% endif %}
+  </nav>
+  <a class="logout" href="/logout">Выйти</a>
+</div>
+
+<div class="container">
+  <p><a href="/products" class="status-label">← Все товары</a></p>
+  <h2>{{ "Редактировать товар" if product else "Новый товар" }}</h2>
+
+  <div class="card">
+    <form method="post" action="{{ '/products/' ~ product.id ~ '/edit' if product else '/products/new' }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="field">
+        <div class="label">Категория</div>
+        <select name="category_id">
+          {% for c in categories %}
+          <option value="{{ c.id }}" {{ "selected" if product and product.category_id == c.id else "" }}>{{ c.icon }} {{ c.title_ru }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="field">
+        <div class="label">Название — русский</div>
+        <input type="text" name="title_ru" value="{{ product.title_ru if product else '' }}" required>
+      </div>
+      <div class="field">
+        <div class="label">Название — հայերեն</div>
+        <input type="text" name="title_hy" value="{{ product.title_hy if product else '' }}" required>
+      </div>
+      <div class="field">
+        <div class="label">Название — English</div>
+        <input type="text" name="title_en" value="{{ product.title_en if product else '' }}" required>
+      </div>
+
+      <div class="field">
+        <div class="label">Описание — русский (необязательно)</div>
+        <textarea name="description_ru" rows="2">{{ product.description_ru if product else '' }}</textarea>
+      </div>
+      <div class="field">
+        <div class="label">Описание — հայերեն (необязательно)</div>
+        <textarea name="description_hy" rows="2">{{ product.description_hy if product else '' }}</textarea>
+      </div>
+      <div class="field">
+        <div class="label">Описание — English (необязательно)</div>
+        <textarea name="description_en" rows="2">{{ product.description_en if product else '' }}</textarea>
+      </div>
+
+      <div class="field-row">
+        <div class="field">
+          <div class="label">Ориентировочная цена (необязательно)</div>
+          <input type="text" name="price" value="{{ product.price if product and product.price is not none else '' }}" placeholder="по запросу, если пусто">
+        </div>
+        <div class="field">
+          <div class="label">Валюта</div>
+          <input type="text" name="currency" value="{{ product.currency if product else 'USD' }}">
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="label">Срок ответа (виден клиенту, пока заявка на рассмотрении)</div>
+        <input type="text" name="response_time_text"
+               value="{{ product.response_time_text if product and product.response_time_text else '' }}"
+               placeholder="напр. 1-3 рабочих дня">
+      </div>
+
+      <div class="checkbox-field">
+        <input type="checkbox" name="is_active" id="is_active" {{ "checked" if not product or product.is_active else "" }}>
+        <label for="is_active">Показывать в Mini App клиентам</label>
+      </div>
+
+      <button class="btn" type="submit">{{ "Сохранить" if product else "Добавить" }}</button>
+    </form>
+  </div>
+
+  {% if product %}
+  <div class="card">
+    <div class="label" style="margin-bottom:8px;">Форма заказа</div>
+    <p class="status-label" style="margin-bottom:12px;">
+      Если добавить сюда вопросы, клиент будет заполнять форму вместо чата.
+      Без вопросов — оформление, как раньше, через чат.
+    </p>
+    <a class="btn" href="/products/{{ product.id }}/questions">Настроить вопросы формы</a>
+  </div>
+  <div class="card">
+    <form method="post" action="/products/{{ product.id }}/delete" onsubmit="return confirm('Удалить товар?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button class="btn danger" type="submit">Удалить товар</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

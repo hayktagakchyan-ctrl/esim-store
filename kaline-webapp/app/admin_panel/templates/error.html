@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Ошибка {{ status_code }} — Админка{% endblock %}
+{% block body %}
+<div class="container" style="max-width:480px; margin-top:80px; text-align:center;">
+  <h2>Ошибка {{ status_code }}</h2>
+  <p class="status-label" style="margin:16px 0 24px;">
+    {% if status_code == 403 %}
+    Сессия могла устареть (например, страница была открыта очень долго). Обнови страницу и попробуй ещё раз.
+    {% else %}
+    Что-то пошло не так. Попробуй обновить страницу.
+    {% endif %}
+  </p>
+  <a class="btn" href="/dashboard">На дашборд</a>
+</div>
+{% endblock %}
